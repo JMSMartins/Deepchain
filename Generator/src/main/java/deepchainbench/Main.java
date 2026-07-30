@@ -1,12 +1,12 @@
-package multibench;
+package deepchainbench;
 
 import java.io.File;
 import java.util.Scanner;
-import multibench.core.BenchmarkEngine;
-import multibench.core.DatabaseDriver;
-import multibench.drivers.ArangoDriver;
-import multibench.generator.Multibench;
-import multibench.core.MetricsExporter;
+import deepchainbench.core.BenchmarkEngine;
+import deepchainbench.core.DatabaseDriver;
+import deepchainbench.drivers.ArangoDriver;
+import deepchainbench.generator.Generator_data;
+import deepchainbench.core.MetricsExporter;
 
 // Novos imports para manipular a data e hora em GMT-0 (UTC)
 import java.time.ZonedDateTime;
@@ -62,9 +62,9 @@ public class Main {
         System.out.println("\n-> A criar o dataset na pasta: ./dataset/" + nomePastaFinal);
 
         if (sfInput.equals("1")) {
-            Multibench.execute(new String[]{"gen", nomePastaFinal});
+            Generator_data.execute(new String[]{"gen", nomePastaFinal});
         } else {
-            Multibench.execute(new String[]{"scale", nomePastaFinal});
+            Generator_data.execute(new String[]{"scale", nomePastaFinal});
         }
     }
 
