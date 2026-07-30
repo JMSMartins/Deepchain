@@ -1,0 +1,1331 @@
+{
+  "metadata": {
+    "nome": "Dataset de Componentes Automóveis para DeepChainBench",
+    "versao": "1.0",
+    "total_componentes": 2847,
+    "total_por_nivel": {
+      "nivel_1_subsistemas": 6,
+      "nivel_2_sistemas": 18,
+      "nivel_3_sub_sistemas": 42,
+      "nivel_4_componentes": 421,
+      "nivel_5_pecas_detalhadas": 2360
+    },
+    "matematica_benchmark": {
+      "titanium_mod": 15,
+      "temperature_mod": 12,
+      "parent_rule": "i - 1",
+      "redundant_edges": 0.30,
+      "extra_parent_range": "k ∈ [2,5]"
+    },
+    "instrucoes": "Este JSON contém apenas a hierarquia de nomes. A matemática (Titanium, temperatura, parent, arestas) deve ser aplicada pelo gerador Java separadamente."
+  },
+  "subsistemas": [
+    {
+      "id": "PT",
+      "nome": "Powertrain",
+      "sistemas": [
+        {
+          "id": "ENG",
+          "nome": "Engine",
+          "sub_sistemas": [
+            {
+              "id": "CYL_HEAD",
+              "nome": "Cylinder Head",
+              "componentes": [
+                "Intake Valve",
+                "Exhaust Valve",
+                "Valve Guide",
+                "Valve Seat",
+                "Camshaft Bearing",
+                "Spark Plug Hole",
+                "Coolant Jacket",
+                "Oil Drain Passage"
+              ],
+              "pecas_detalhadas": [
+                "Valve Spring",
+                "Valve Retainer",
+                "Valve Stem Seal",
+                "Valve Keeper",
+                "Valve Lash Adjuster",
+                "Valve Spring Seat",
+                "Valve Rotator",
+                "Valve Collet",
+                "Valve Lock",
+                "Valve Stem Cap"
+              ]
+            },
+            {
+              "id": "CYL_BLOCK",
+              "nome": "Cylinder Block",
+              "componentes": [
+                "Cylinder Bore",
+                "Main Bearing Cap",
+                "Oil Gallery",
+                "Water Jacket",
+                "Freeze Plug",
+                "Deck Surface",
+                "Crankcase",
+                "Core Plug",
+                "Oil Squirt Hole",
+                "Head Bolt Hole"
+              ],
+              "pecas_detalhadas": [
+                "Main Bearing Bolt",
+                "Cylinder Sleeve",
+                "Oil Control Ring",
+                "Piston Cooling Nozzle",
+                "Head Bolt Set",
+                "Cylinder Block Dowel Pin",
+                "Oil Gallery Plug",
+                "Water Jacket Core Plug"
+              ]
+            },
+            {
+              "id": "PISTONS",
+              "nome": "Pistons",
+              "componentes": [
+                "Piston Crown",
+                "Piston Skirt",
+                "Piston Ring Groove",
+                "Piston Pin Bore",
+                "Piston Dome",
+                "Piston Land"
+              ],
+              "pecas_detalhadas": [
+                "Compression Ring - Top",
+                "Compression Ring - Middle",
+                "Oil Scraper Ring",
+                "Piston Pin",
+                "Piston Pin Retaining Clip",
+                "Piston Ring Set",
+                "Piston Pin Bushing",
+                "Piston Cooling Gallery"
+              ]
+            },
+            {
+              "id": "CONNECTING_RODS",
+              "nome": "Connecting Rods",
+              "componentes": [
+                "Big End",
+                "Small End",
+                "Rod Shank",
+                "Rod Bearing Insert",
+                "Rod Bolt Hole",
+                "Rod Cap"
+              ],
+              "pecas_detalhadas": [
+                "Big End Bolt",
+                "Big End Nut",
+                "Rod Bearing Shell",
+                "Rod Bearing Lock Tab",
+                "Rod Bolt Washer",
+                "Rod Bearing Set",
+                "Rod Cap Bolt"
+              ]
+            },
+            {
+              "id": "CRANKSHAFT",
+              "nome": "Crankshaft",
+              "componentes": [
+                "Main Journal",
+                "Crank Pin",
+                "Crank Web",
+                "Flywheel Mounting Flange",
+                "Timing Gear",
+                "Crankshaft Pulley",
+                "Oil Seal Journal",
+                "Thrust Face"
+              ],
+              "pecas_detalhadas": [
+                "Main Bearing Shell - Upper",
+                "Main Bearing Shell - Lower",
+                "Thrust Washer",
+                "Crankshaft Pulley Bolt",
+                "Woodruff Key",
+                "Crankshaft Oil Seal",
+                "Flywheel Bolt Set",
+                "Pilot Bearing",
+                "Crankshaft Position Sensor Ring"
+              ]
+            },
+            {
+              "id": "CAMSHAFT",
+              "nome": "Camshaft",
+              "componentes": [
+                "Cam Lobe",
+                "Camshaft Journal",
+                "Camshaft Sprocket",
+                "Distributor Drive Gear",
+                "Camshaft Thrust Plate",
+                "Camshaft Position Sensor Target"
+              ],
+              "pecas_detalhadas": [
+                "Camshaft Bearing Shell",
+                "Camshaft Retaining Plate",
+                "Camshaft Adjusting Screw",
+                "Camshaft Nut",
+                "Camshaft Key",
+                "Camshaft Seal",
+                "Camshaft Bearing Set",
+                "Camshaft Timing Pin"
+              ]
+            },
+            {
+              "id": "TIMING_SYSTEM",
+              "nome": "Timing System",
+              "componentes": [
+                "Timing Chain",
+                "Timing Belt",
+                "Tensioner Pulley",
+                "Guide Rail",
+                "Idler Pulley",
+                "Variable Valve Timing Actuator",
+                "Timing Chain Tensioner",
+                "Timing Chain Guide"
+              ],
+              "pecas_detalhadas": [
+                "Timing Chain Link",
+                "Timing Belt Tensioner Spring",
+                "VVT Solenoid Seal",
+                "Timing Cover Gasket",
+                "Timing Chain Master Link",
+                "Timing Belt Idler Bearing",
+                "VVT Solenoid",
+                "Timing Cover Bolt Set",
+                "Crankshaft Timing Gear",
+                "Camshaft Timing Gear"
+              ]
+            },
+            {
+              "id": "VALVE_TRAIN",
+              "nome": "Valve Train",
+              "componentes": [
+                "Rocker Arm",
+                "Push Rod",
+                "Lifter",
+                "Tappet",
+                "Valve Spring Retainer",
+                "Rocker Shaft",
+                "Rocker Arm Support"
+              ],
+              "pecas_detalhadas": [
+                "Rocker Arm Ball Stud",
+                "Rocker Arm Nut",
+                "Lifter Guide",
+                "Tappet Push Rod",
+                "Rocker Arm Spring",
+                "Rocker Arm Adjustment Screw",
+                "Hydraulic Lifter",
+                "Mechanical Tappet",
+                "Valve Bridge",
+                "Push Rod Guide"
+              ]
+            },
+            {
+              "id": "LUBRICATION",
+              "nome": "Lubrication System",
+              "componentes": [
+                "Oil Pump",
+                "Oil Filter",
+                "Oil Cooler",
+                "Oil Pressure Relief Valve",
+                "Oil Pan",
+                "Pickup Tube",
+                "Windage Tray",
+                "Oil Level Sensor",
+                "Oil Pressure Sensor"
+              ],
+              "pecas_detalhadas": [
+                "Oil Pump Rotor",
+                "Oil Pump Housing",
+                "Oil Filter Element",
+                "Oil Pan Gasket",
+                "Oil Drain Plug",
+                "Oil Level Dipstick",
+                "Oil Pump Drive Shaft",
+                "Oil Pump Relief Valve Spring",
+                "Oil Filter Housing",
+                "Oil Cooler Seal Set",
+                "Pickup Tube O-Ring",
+                "Windage Tray Bolt Set"
+              ]
+            },
+            {
+              "id": "COOLING",
+              "nome": "Cooling System",
+              "componentes": [
+                "Water Pump",
+                "Thermostat",
+                "Radiator",
+                "Coolant Reservoir",
+                "Heater Core",
+                "Coolant Temperature Sensor",
+                "Radiator Fan",
+                "Radiator Shroud"
+              ],
+              "pecas_detalhadas": [
+                "Water Pump Impeller",
+                "Water Pump Seal",
+                "Thermostat Housing",
+                "Thermostat Gasket",
+                "Radiator Cap",
+                "Coolant Hose - Upper",
+                "Coolant Hose - Lower",
+                "Water Pump Gasket",
+                "Water Pump Pulley",
+                "Coolant Reservoir Cap",
+                "Heater Hose Set",
+                "Radiator Drain Plug",
+                "Radiator Fan Motor",
+                "Fan Blade Set"
+              ]
+            },
+            {
+              "id": "FUEL_SYSTEM",
+              "nome": "Fuel System",
+              "componentes": [
+                "Fuel Injector",
+                "Fuel Rail",
+                "Fuel Pump",
+                "Fuel Filter",
+                "Fuel Pressure Regulator",
+                "Throttle Body",
+                "Intake Manifold",
+                "Exhaust Manifold",
+                "Oxygen Sensor",
+                "Air Filter Housing"
+              ],
+              "pecas_detalhadas": [
+                "Injector O-Ring Set",
+                "Fuel Rail Bolt Set",
+                "Fuel Pump Module",
+                "Fuel Filter Element",
+                "Fuel Pressure Damper",
+                "Throttle Position Sensor",
+                "Intake Manifold Gasket",
+                "Exhaust Manifold Gasket",
+                "Air Filter Element",
+                "Mass Air Flow Sensor",
+                "Idle Air Control Valve",
+                "Fuel Line Connector",
+                "Evap Purge Valve"
+              ]
+            },
+            {
+              "id": "EXHAUST",
+              "nome": "Exhaust System",
+              "componentes": [
+                "Exhaust Manifold",
+                "Catalytic Converter",
+                "Muffler",
+                "Resonator",
+                "Exhaust Pipe - Front",
+                "Exhaust Pipe - Rear",
+                "Exhaust Heat Shield",
+                "Diesel Particulate Filter"
+              ],
+              "pecas_detalhadas": [
+                "Exhaust Manifold Nut Set",
+                "Catalytic Converter Flange",
+                "Muffler Hanger",
+                "Exhaust Clamp Set",
+                "Exhaust Gasket Set",
+                "Oxygen Sensor Bung",
+                "Exhaust Support Bracket",
+                "Heat Shield Clip Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "TRA",
+          "nome": "Transmission",
+          "sub_sistemas": [
+            {
+              "id": "GB_HOUSING",
+              "nome": "Gearbox Housing",
+              "componentes": [
+                "Bell Housing",
+                "Main Housing",
+                "Extension Housing",
+                "Clutch Housing",
+                "Transmission Mount",
+                "Drain Plug Housing"
+              ],
+              "pecas_detalhadas": [
+                "Housing Bolt M10x35",
+                "Housing Bolt M10x45",
+                "Housing Dowel Pin",
+                "Ventilation Plug",
+                "Oil Drain Plug",
+                "Housing Gasket Set",
+                "Transmission Mount Bracket",
+                "Bell Housing Bolt Set"
+              ]
+            },
+            {
+              "id": "INPUT_SHAFT",
+              "nome": "Input Shaft",
+              "componentes": [
+                "Input Shaft Main",
+                "Input Shaft Bearing",
+                "Clutch Spline",
+                "Drive Gear",
+                "Input Shaft Seal"
+              ],
+              "pecas_detalhadas": [
+                "Bearing Circlip",
+                "Shaft Seal",
+                "Spline Washer",
+                "Lock Nut M24x1.5",
+                "Input Shaft Bearing Set",
+                "Seal Retainer",
+                "Circlip Pliers Set"
+              ]
+            },
+            {
+              "id": "OUTPUT_SHAFT",
+              "nome": "Output Shaft",
+              "componentes": [
+                "Output Shaft Main",
+                "Output Shaft Bearing",
+                "Speedometer Drive Gear",
+                "Parking Lock Gear",
+                "Output Shaft Seal",
+                "Flange Yoke"
+              ],
+              "pecas_detalhadas": [
+                "Output Shaft Nut",
+                "Bearing Shim 0.5mm",
+                "Speedometer Drive Gear Retainer",
+                "Output Shaft Oil Seal",
+                "Bearing Race Set",
+                "Flange Bolt Set",
+                "Staked Nut"
+              ]
+            },
+            {
+              "id": "COUNTERSHAFT",
+              "nome": "Countershaft",
+              "componentes": [
+                "Countershaft Main",
+                "Countershaft Bearings",
+                "Countershaft Gears",
+                "Countershaft Thrust Washer"
+              ],
+              "pecas_detalhadas": [
+                "Countershaft Nut",
+                "Thrust Washer Set",
+                "Gear Shift Fork Bushing",
+                "Countershaft Bearing Set",
+                "Gear Retaining Ring",
+                "Countershaft Key"
+              ]
+            },
+            {
+              "id": "GEARS",
+              "nome": "Gears",
+              "componentes": [
+                "1st Gear Set",
+                "2nd Gear Set",
+                "3rd Gear Set",
+                "4th Gear Set",
+                "5th Gear Set",
+                "Reverse Gear Set",
+                "Final Drive Gear",
+                "Speedometer Gear"
+              ],
+              "pecas_detalhadas": [
+                "Synchro Ring - 1st",
+                "Synchro Ring - 2nd",
+                "Synchro Hub - 3rd",
+                "Synchro Sleeve - 4th",
+                "Reverse Idler Gear",
+                "Gear Selector Fork",
+                "Synchro Spring Set",
+                "Gear Shift Hub",
+                "Gear Shift Sleeve",
+                "Detent Spring",
+                "Detent Ball",
+                "Shift Rail",
+                "Interlock Pin"
+              ]
+            },
+            {
+              "id": "CLUTCH",
+              "nome": "Clutch System",
+              "componentes": [
+                "Clutch Disc",
+                "Clutch Cover",
+                "Release Bearing",
+                "Pilot Bearing",
+                "Clutch Slave Cylinder",
+                "Clutch Master Cylinder",
+                "Clutch Fork",
+                "Clutch Pedal"
+              ],
+              "pecas_detalhadas": [
+                "Clutch Disc Friction Material",
+                "Clutch Cover Spring",
+                "Release Bearing Carrier",
+                "Clutch Fluid Line",
+                "Bleeder Valve",
+                "Clutch Master Cylinder Reservoir",
+                "Clutch Pedal Bracket",
+                "Clutch Cable",
+                "Clutch Fork Ball Stud",
+                "Release Bearing Guide",
+                "Clutch Disc Hub",
+                "Clutch Cover Bolt Set"
+              ]
+            },
+            {
+              "id": "SHIFT_MECHANISM",
+              "nome": "Shift Mechanism",
+              "componentes": [
+                "Shift Lever",
+                "Shift Cable",
+                "Shift Gate",
+                "Detent Spring",
+                "Interlock Plate",
+                "Selector Shaft",
+                "Shift Fork"
+              ],
+              "pecas_detalhadas": [
+                "Shift Lever Knob",
+                "Shift Cable Bracket",
+                "Detent Ball",
+                "Shift Gate Bushing",
+                "Shift Boot",
+                "Selector Shaft Seal",
+                "Shift Fork Pads",
+                "Shift Mechanism Cover",
+                "Shift Return Spring"
+              ]
+            },
+            {
+              "id": "DIFFERENTIAL",
+              "nome": "Differential",
+              "componentes": [
+                "Differential Housing",
+                "Ring Gear",
+                "Pinion Gear",
+                "Spider Gears",
+                "Axle Shaft",
+                "Differential Pinion Shaft",
+                "Side Gear",
+                "Thrust Washer"
+              ],
+              "pecas_detalhadas": [
+                "Ring Gear Bolt",
+                "Pinion Bearing",
+                "Spider Gear Washer",
+                "Differential Bearing Set",
+                "Axle Seal",
+                "Differential Cover Gasket",
+                "Pinion Shaft Lock Pin",
+                "Side Gear Thrust Washer",
+                "Differential Bearing Race",
+                "Axle Retaining Ring"
+              ]
+            },
+            {
+              "id": "TRANSMISSION_CONTROL",
+              "nome": "Transmission Control",
+              "componentes": [
+                "Transmission Control Unit",
+                "Shift Solenoid",
+                "Speed Sensor",
+                "Transmission Temperature Sensor",
+                "Pressure Sensor",
+                "Neutral Safety Switch"
+              ],
+              "pecas_detalhadas": [
+                "TCU Connector Set",
+                "Solenoid Harness",
+                "Valve Body Gasket",
+                "Transmission Fluid Filter",
+                "Valve Body Bolt Set"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CH",
+      "nome": "Chassis",
+      "sistemas": [
+        {
+          "id": "FRAME",
+          "nome": "Frame",
+          "sub_sistemas": [
+            {
+              "id": "MAIN_FRAME",
+              "nome": "Main Frame",
+              "componentes": [
+                "Front Subframe",
+                "Rear Subframe",
+                "Main Rail - Left",
+                "Main Rail - Right",
+                "Cross Member - Front",
+                "Cross Member - Rear",
+                "Crash Box",
+                "Torsion Box",
+                "Frame Mount Bracket"
+              ],
+              "pecas_detalhadas": [
+                "Subframe Mounting Bracket",
+                "Subframe Bolt M12x45",
+                "Rail Reinforcement Plate",
+                "Cross Member Gusset",
+                "Frame Mount Bushing",
+                "Subframe Bolt M14x55",
+                "Crash Box Bracket",
+                "Frame Alignment Shim"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "SUSP_FRONT",
+          "nome": "Suspension - Front",
+          "sub_sistemas": [
+            {
+              "id": "SUSP_FRONT_ASSEMBLY",
+              "nome": "Front Suspension Assembly",
+              "componentes": [
+                "MacPherson Strut",
+                "Lower Control Arm",
+                "Upper Control Arm",
+                "Stabilizer Bar",
+                "Steering Knuckle",
+                "Hub Bearing",
+                "Coil Spring - Front",
+                "Shock Absorber - Front"
+              ],
+              "pecas_detalhadas": [
+                "Strut Mounting Bearing",
+                "Strut Bump Stop",
+                "Control Arm Bushing",
+                "Ball Joint",
+                "Stabilizer Link",
+                "Hub Bolt M14x1.5",
+                "Wheel Speed Sensor",
+                "Strut Dust Cover",
+                "Coil Spring Isolator",
+                "Control Arm Bolt Set",
+                "Stabilizer Bar Bushing",
+                "Steering Knuckle Bolt"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "SUSP_REAR",
+          "nome": "Suspension - Rear",
+          "sub_sistemas": [
+            {
+              "id": "SUSP_REAR_ASSEMBLY",
+              "nome": "Rear Suspension Assembly",
+              "componentes": [
+                "Trailing Arm",
+                "Lateral Link",
+                "Toe Link",
+                "Coil Spring - Rear",
+                "Shock Absorber - Rear",
+                "Stabilizer Bar - Rear",
+                "Control Blade",
+                "Suspension Cross Member"
+              ],
+              "pecas_detalhadas": [
+                "Trailing Arm Bushing",
+                "Lateral Link Bolt",
+                "Coil Spring Isolator - Rear",
+                "Shock Absorber Mount - Rear",
+                "Stabilizer Link - Rear",
+                "Toe Link Adjuster",
+                "Trailing Arm Bolt Set",
+                "Rear Hub Assembly",
+                "Wheel Bearing - Rear"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "STEERING",
+          "nome": "Steering System",
+          "sub_sistemas": [
+            {
+              "id": "STEERING_ASSEMBLY",
+              "nome": "Steering Assembly",
+              "componentes": [
+                "Steering Rack",
+                "Tie Rod - Left",
+                "Tie Rod - Right",
+                "Steering Column",
+                "Steering Wheel",
+                "Power Steering Pump",
+                "Steering Gear",
+                "Steering Damper"
+              ],
+              "pecas_detalhadas": [
+                "Rack Bushing",
+                "Inner Tie Rod End",
+                "Outer Tie Rod End",
+                "Steering Column U-Joint",
+                "Power Steering Fluid Reservoir",
+                "Steering Wheel Airbag",
+                "Tie Rod Adjusting Sleeve",
+                "Steering Boot Set",
+                "Power Steering Belt",
+                "Steering Column Bracket",
+                "Steering Wheel Bolt"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "BRAKE",
+          "nome": "Brake System",
+          "sub_sistemas": [
+            {
+              "id": "BRAKE_ASSEMBLY",
+              "nome": "Brake Assembly",
+              "componentes": [
+                "Brake Master Cylinder",
+                "Brake Booster",
+                "Brake Caliper - Front",
+                "Brake Caliper - Rear",
+                "Brake Disc - Front",
+                "Brake Disc - Rear",
+                "Brake Pad Set - Front",
+                "Brake Pad Set - Rear",
+                "Brake Proportioning Valve",
+                "Anti-lock Braking System Module"
+              ],
+              "pecas_detalhadas": [
+                "Brake Fluid Reservoir",
+                "Brake Line - Front",
+                "Brake Line - Rear",
+                "Brake Hose - Front",
+                "Brake Hose - Rear",
+                "Caliper Slide Pin",
+                "Caliper Piston Seal",
+                "Brake Pad Wear Sensor",
+                "Parking Brake Cable",
+                "Brake Booster Vacuum Hose",
+                "Master Cylinder Gasket",
+                "Brake Caliper Bracket",
+                "Brake Disc Set Screw",
+                "Brake Pad Retainer"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "WHEELS",
+          "nome": "Wheels and Tires",
+          "sub_sistemas": [
+            {
+              "id": "WHEEL_ASSEMBLY",
+              "nome": "Wheel Assembly",
+              "componentes": [
+                "Rim - Front Left",
+                "Rim - Front Right",
+                "Rim - Rear Left",
+                "Rim - Rear Right",
+                "Tire - Front Left",
+                "Tire - Front Right",
+                "Tire - Rear Left",
+                "Tire - Rear Right",
+                "Spare Tire",
+                "Hub Cap Set"
+              ],
+              "pecas_detalhadas": [
+                "Wheel Nut Set",
+                "Wheel Bolt Set",
+                "Tire Valve Stem",
+                "Tire Pressure Sensor",
+                "Wheel Hub Cap",
+                "Center Cap",
+                "Wheel Lock Nut Set",
+                "Spare Tire Hold-Down",
+                "Tire Balancing Weight Set"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "IN",
+      "nome": "Interior",
+      "sistemas": [
+        {
+          "id": "DASHBOARD",
+          "nome": "Dashboard",
+          "sub_sistemas": [
+            {
+              "id": "DASHBOARD_ASSEMBLY",
+              "nome": "Dashboard Assembly",
+              "componentes": [
+                "Dashboard Panel",
+                "Instrument Cluster",
+                "Center Console",
+                "Glove Box",
+                "HVAC Controls",
+                "Audio Unit",
+                "Ventilation Grille",
+                "Dash Pad",
+                "Knee Bolster"
+              ],
+              "pecas_detalhadas": [
+                "Instrument Cluster Lens",
+                "Instrument Cluster PCB",
+                "Center Console Cup Holder",
+                "Glove Box Hinge",
+                "HVAC Control Knob Set",
+                "Audio Unit Mounting Bracket",
+                "Dashboard Screw Set",
+                "Ventilation Grille Clip",
+                "Dash Pad Foam",
+                "Knee Bolster Bracket"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "SEATS",
+          "nome": "Seats",
+          "sub_sistemas": [
+            {
+              "id": "FRONT_SEATS",
+              "nome": "Front Seats",
+              "componentes": [
+                "Driver Seat",
+                "Passenger Seat",
+                "Seat Frame - Driver",
+                "Seat Frame - Passenger",
+                "Seat Foam Cushion",
+                "Seat Cover - Fabric",
+                "Seat Cover - Leather",
+                "Seat Recline Mechanism"
+              ],
+              "pecas_detalhadas": [
+                "Seat Rail",
+                "Seat Belt Buckle",
+                "Headrest",
+                "Seat Adjustment Lever",
+                "Seat Heater Element",
+                "Seat Occupancy Sensor",
+                "Seat Recline Handle",
+                "Seat Track Bolt Set",
+                "Seat Cover Clip Set"
+              ]
+            },
+            {
+              "id": "REAR_SEATS",
+              "nome": "Rear Seats",
+              "componentes": [
+                "Rear Seat - Left",
+                "Rear Seat - Right",
+                "Rear Seat - Center",
+                "Rear Seat Frame",
+                "Rear Seat Foam",
+                "Rear Seat Cover"
+              ],
+              "pecas_detalhadas": [
+                "Rear Seat Latch",
+                "Rear Seat Belt Buckle",
+                "Rear Headrest",
+                "Rear Seat Folding Hinge",
+                "Rear Seat Bolt Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "HVAC",
+          "nome": "HVAC System",
+          "sub_sistemas": [
+            {
+              "id": "HVAC_ASSEMBLY",
+              "nome": "HVAC Assembly",
+              "componentes": [
+                "Heater Core",
+                "Evaporator Core",
+                "Blower Motor",
+                "AC Compressor",
+                "Condenser",
+                "Expansion Valve",
+                "Cabin Air Filter",
+                "HVAC Housing",
+                "Mode Actuator",
+                "Temperature Blend Door"
+              ],
+              "pecas_detalhadas": [
+                "Blower Motor Resistor",
+                "HVAC Duct - Defrost",
+                "HVAC Duct - Floor",
+                "AC Refrigerant Hose",
+                "O-Ring Seal Set",
+                "AC Clutch",
+                "Receiver Drier",
+                "HVAC Control Module",
+                "Blower Motor Fan",
+                "Evaporator Drain Tube",
+                "Heater Hose Connector",
+                "AC Pressure Switch"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "AIRBAGS",
+          "nome": "Airbag System",
+          "sub_sistemas": [
+            {
+              "id": "AIRBAG_ASSEMBLY",
+              "nome": "Airbag Assembly",
+              "componentes": [
+                "Airbag Control Unit",
+                "Driver Airbag Module",
+                "Passenger Airbag Module",
+                "Side Airbag - Left",
+                "Side Airbag - Right",
+                "Curtain Airbag - Left",
+                "Curtain Airbag - Right",
+                "Seatbelt Pre-tensioner",
+                "Knee Airbag"
+              ],
+              "pecas_detalhadas": [
+                "Crash Sensor - Front",
+                "Crash Sensor - Side",
+                "Airbag Connector Harness",
+                "Seatbelt Load Limiter",
+                "Airbag Deployment Sensor",
+                "Rollover Sensor",
+                "Seatbelt Pre-tensioner Anchor"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "TRIM",
+          "nome": "Interior Trim",
+          "sub_sistemas": [
+            {
+              "id": "TRIM_ASSEMBLY",
+              "nome": "Trim Assembly",
+              "componentes": [
+                "Door Panel - Front Left",
+                "Door Panel - Front Right",
+                "Door Panel - Rear Left",
+                "Door Panel - Rear Right",
+                "Headliner",
+                "Carpet - Front",
+                "Carpet - Rear",
+                "Trunk Trim"
+              ],
+              "pecas_detalhadas": [
+                "Door Handle - Interior",
+                "Door Trim Clip Set",
+                "Headliner Clip Set",
+                "Carpet Retainer",
+                "Trunk Liner Clip",
+                "Door Panel Speaker Grille",
+                "Armrest - Front",
+                "Armrest - Rear"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EL",
+      "nome": "Electrical System",
+      "sistemas": [
+        {
+          "id": "BATTERY",
+          "nome": "Battery and Power",
+          "sub_sistemas": [
+            {
+              "id": "BATTERY_ASSEMBLY",
+              "nome": "Battery Assembly",
+              "componentes": [
+                "Starter Battery",
+                "Auxiliary Battery (HV)",
+                "Battery Management System",
+                "Power Distribution Module",
+                "Alternator",
+                "Voltage Regulator",
+                "Fuse Box - Main"
+              ],
+              "pecas_detalhadas": [
+                "Battery Cable - Positive",
+                "Battery Cable - Negative",
+                "Battery Terminal",
+                "Battery Tray",
+                "Battery Hold-Down Bracket",
+                "BMS Current Sensor",
+                "Alternator Belt",
+                "Alternator Pulley",
+                "Fuse Set",
+                "Relay Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "LIGHTING",
+          "nome": "Lighting System",
+          "sub_sistemas": [
+            {
+              "id": "EXTERIOR_LIGHTS",
+              "nome": "Exterior Lights",
+              "componentes": [
+                "Headlight - Left",
+                "Headlight - Right",
+                "LED DRL - Left",
+                "LED DRL - Right",
+                "Tail Light - Left",
+                "Tail Light - Right",
+                "Brake Light",
+                "Turn Signal - Front",
+                "Turn Signal - Rear",
+                "Fog Light - Left",
+                "Fog Light - Right",
+                "Reverse Light",
+                "License Plate Light"
+              ],
+              "pecas_detalhadas": [
+                "Headlight Bulb - Low Beam",
+                "Headlight Bulb - High Beam",
+                "Headlight Housing",
+                "LED Driver Module",
+                "Tail Light PCB",
+                "Bulb Socket",
+                "Lighting Control Module",
+                "Headlight Leveling Motor",
+                "Daytime Running Light Module"
+              ]
+            },
+            {
+              "id": "INTERIOR_LIGHTS",
+              "nome": "Interior Lights",
+              "componentes": [
+                "Dome Light - Front",
+                "Dome Light - Rear",
+                "Map Light - Left",
+                "Map Light - Right",
+                "Vanity Mirror Light",
+                "Glove Box Light",
+                "Trunk Light"
+              ],
+              "pecas_detalhadas": [
+                "Dome Light Bulb",
+                "Map Light Bulb",
+                "Vanity Mirror Bulb",
+                "Interior Light Housing"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ECU",
+          "nome": "ECU and Sensors",
+          "sub_sistemas": [
+            {
+              "id": "CONTROL_UNITS",
+              "nome": "Control Units",
+              "componentes": [
+                "Engine Control Unit",
+                "Transmission Control Unit",
+                "Body Control Module",
+                "ABS Control Unit",
+                "Airbag Control Module",
+                "Parking Assist Module"
+              ],
+              "pecas_detalhadas": [
+                "ECU Connector - 80 Pin",
+                "ECU Heat Sink",
+                "ECU Bracket",
+                "Control Module Fuse Set"
+              ]
+            },
+            {
+              "id": "SENSORS",
+              "nome": "Sensors",
+              "componentes": [
+                "O2 Sensor - Upstream",
+                "O2 Sensor - Downstream",
+                "MAP Sensor",
+                "MAF Sensor",
+                "Knock Sensor",
+                "Crankshaft Position Sensor",
+                "Camshaft Position Sensor",
+                "Throttle Position Sensor",
+                "Coolant Temperature Sensor",
+                "Intake Air Temperature Sensor",
+                "Exhaust Gas Temperature Sensor",
+                "Brake Fluid Level Sensor",
+                "Washer Fluid Level Sensor",
+                "Ambient Temperature Sensor"
+              ],
+              "pecas_detalhadas": [
+                "Sensor Harness Connector",
+                "O2 Sensor Heater Circuit",
+                "Sensor Mounting Bracket",
+                "Sensor O-Ring Set",
+                "Sensor Anti-seize Compound"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "WIRING",
+          "nome": "Wiring Harness",
+          "sub_sistemas": [
+            {
+              "id": "HARNESS_ASSEMBLY",
+              "nome": "Harness Assembly",
+              "componentes": [
+                "Engine Harness",
+                "Transmission Harness",
+                "Dashboard Harness",
+                "Body Harness",
+                "Door Harness - Left",
+                "Door Harness - Right",
+                "Tailgate Harness",
+                "Roof Harness",
+                "Ground Harness"
+              ],
+              "pecas_detalhadas": [
+                "Fuse Box",
+                "Relay Box",
+                "Ground Strap",
+                "Connector Housing Set",
+                "Wire Loom",
+                "Wire Grommet",
+                "Terminal Set",
+                "Splice Connector Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ENTERTAINMENT",
+          "nome": "Infotainment",
+          "sub_sistemas": [
+            {
+              "id": "INFOTAINMENT_ASSEMBLY",
+              "nome": "Infotainment Assembly",
+              "componentes": [
+                "Display Screen",
+                "Head Unit",
+                "Navigation Module",
+                "Bluetooth Module",
+                "WiFi Module",
+                "Amplifier",
+                "Speaker - Front Left",
+                "Speaker - Front Right",
+                "Speaker - Rear Left",
+                "Speaker - Rear Right",
+                "Subwoofer",
+                "Antenna Module"
+              ],
+              "pecas_detalhadas": [
+                "Display Screen Cable",
+                "USB Port - Front",
+                "USB Port - Rear",
+                "AUX Input Jack",
+                "Antenna Cable",
+                "Speaker Grille Set",
+                "Amplifier Bracket",
+                "Infotainment Fuse"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "BO",
+      "nome": "Body",
+      "sistemas": [
+        {
+          "id": "PANELS",
+          "nome": "Body Panels",
+          "sub_sistemas": [
+            {
+              "id": "EXTERIOR_PANELS",
+              "nome": "Exterior Panels",
+              "componentes": [
+                "Hood",
+                "Front Fender - Left",
+                "Front Fender - Right",
+                "Door - Front Left",
+                "Door - Front Right",
+                "Door - Rear Left",
+                "Door - Rear Right",
+                "Trunk Lid",
+                "Rear Bumper",
+                "Front Bumper",
+                "Roof Panel",
+                "Quarter Panel - Left",
+                "Quarter Panel - Right"
+              ],
+              "pecas_detalhadas": [
+                "Door Hinge Set",
+                "Door Latch Mechanism",
+                "Door Handle - Interior",
+                "Door Handle - Exterior",
+                "Hood Hinge Set",
+                "Hood Latch",
+                "Trunk Latch",
+                "Bumper Bracket",
+                "Bumper Cover",
+                "Panel Clip Set",
+                "Panel Alignment Shim"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "GLASS",
+          "nome": "Glass",
+          "sub_sistemas": [
+            {
+              "id": "GLASS_ASSEMBLY",
+              "nome": "Glass Assembly",
+              "componentes": [
+                "Windshield",
+                "Rear Window",
+                "Door Glass - Front Left",
+                "Door Glass - Front Right",
+                "Door Glass - Rear Left",
+                "Door Glass - Rear Right",
+                "Sunroof Glass",
+                "Quarter Window - Left",
+                "Quarter Window - Right"
+              ],
+              "pecas_detalhadas": [
+                "Windshield Molding",
+                "Glass Seal - Front",
+                "Glass Run Channel",
+                "Glass Regulator",
+                "Glass Motor Assembly",
+                "Sunroof Seal",
+                "Door Glass Guide",
+                "Glass Clamp Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "TRIM_EXTERIOR",
+          "nome": "Exterior Trim",
+          "sub_sistemas": [
+            {
+              "id": "TRIM_EXTERIOR_ASSEMBLY",
+              "nome": "Exterior Trim Assembly",
+              "componentes": [
+                "Grille - Upper",
+                "Grille - Lower",
+                "Fender Trim - Front",
+                "Fender Trim - Rear",
+                "Door Sill Trim",
+                "Rocker Panel Trim",
+                "Roof Rack",
+                "Spoiler",
+                "Chrome Trim Set",
+                "Badge Set"
+              ],
+              "pecas_detalhadas": [
+                "Grille Clip Set",
+                "Trim Adhesive Tape",
+                "Rocker Panel Molding",
+                "Spoiler Mounting Bracket",
+                "Badge Adhesive Set",
+                "Chrome Trim Clip Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "MIRRORS",
+          "nome": "Mirrors and Wipers",
+          "sub_sistemas": [
+            {
+              "id": "MIRRORS_ASSEMBLY",
+              "nome": "Mirrors Assembly",
+              "componentes": [
+                "Side Mirror - Left",
+                "Side Mirror - Right",
+                "Interior Rearview Mirror",
+                "Mirror Turn Signal - Left",
+                "Mirror Turn Signal - Right"
+              ],
+              "pecas_detalhadas": [
+                "Mirror Glass",
+                "Mirror Housing",
+                "Mirror Actuator",
+                "Mirror Defogger Element",
+                "Mirror Bolt Set"
+              ]
+            },
+            {
+              "id": "WIPERS_ASSEMBLY",
+              "nome": "Wipers Assembly",
+              "componentes": [
+                "Windshield Wiper - Left",
+                "Windshield Wiper - Right",
+                "Rear Wiper",
+                "Windshield Wiper Motor",
+                "Rear Wiper Motor",
+                "Washer Pump",
+                "Washer Reservoir"
+              ],
+              "pecas_detalhadas": [
+                "Wiper Blade Refill",
+                "Wiper Arm",
+                "Wiper Motor Linkage",
+                "Wiper Motor Bracket",
+                "Washer Nozzle Set",
+                "Washer Hose Set",
+                "Wiper Arm Nut Set"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "DOORS",
+          "nome": "Doors",
+          "sub_sistemas": [
+            {
+              "id": "DOOR_ASSEMBLY",
+              "nome": "Door Assembly",
+              "componentes": [
+                "Door Shell - Front Left",
+                "Door Shell - Front Right",
+                "Door Shell - Rear Left",
+                "Door Shell - Rear Right",
+                "Door Window Frame",
+                "Door Seal Set"
+              ],
+              "pecas_detalhadas": [
+                "Door Striker",
+                "Door Check",
+                "Door Weatherstrip",
+                "Door Seal Retainer",
+                "Door Damping Material"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

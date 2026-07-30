@@ -1,4 +1,4 @@
-package multibench.drivers;
+package deepchainbench.drivers;
 
 import com.arangodb.ArangoDB;
 import com.arangodb.ArangoDatabase;
@@ -6,7 +6,7 @@ import com.arangodb.entity.CollectionType;
 import com.arangodb.entity.EdgeDefinition;
 import com.arangodb.model.CollectionCreateOptions;
 import com.arangodb.model.GraphCreateOptions;
-import multibench.core.DatabaseDriver;
+import deepchainbench.core.DatabaseDriver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.BufferedReader;

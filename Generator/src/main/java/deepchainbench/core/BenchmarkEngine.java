@@ -1,4 +1,4 @@
-package multibench.core;
+package deepchainbench.core;
 
 import com.arangodb.ArangoCursor;
 import com.arangodb.ArangoDatabase;
