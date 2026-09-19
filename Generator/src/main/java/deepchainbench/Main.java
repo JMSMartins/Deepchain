@@ -24,7 +24,8 @@ public class Main {
             System.out.println("=========================================");
             System.out.println("1. Criar novo Dataset (Scale Factor)");
             System.out.println("2. Ingestão de Dados (Configurar Esquema e Carregar)");
-            System.out.println("3. Executar Testes (Benchmark de Queries)");
+            System.out.println("3. Executar Testes RFI (Benchmark de Queries)");
+            System.out.println("4. Executar Testes Concorrencia (Benchmark de Queries) (Não Implementado)");
             System.out.println("0. Sair");
             System.out.print("Escolha uma opção: ");
 
@@ -38,7 +39,10 @@ public class Main {
                     menuIngestaoDados(scanner);
                     break;
                 case "3":
-                    menuExecutarBenchmark(scanner);
+                    menuExecutarBenchmarkRFI(scanner);
+                    break;
+                case "4":
+                    menuExecutarBenchmarkConcorrente(scanner);
                     break;
                 case "0":
                     System.out.println("A sair do sistema. Até à próxima!");
@@ -77,6 +81,7 @@ public class Main {
         System.out.println("1. ArangoDB");
         System.out.println("2. OrientDB (Não implementado)");
         System.out.println("3. PostgreSQL (Não implementado)");
+        System.err.println("4. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
@@ -93,6 +98,8 @@ public class Main {
                 return;
             } else if (targetDb.equals("3")) {
                 System.out.println("O módulo PostgreSQL ainda não foi implementado.");
+                return;
+            } else if (targetDb.equals("4")) {
                 return;
             } else {
                 System.out.println("Opção inválida.");
@@ -133,7 +140,7 @@ public class Main {
 
             // Configurar Formatador de Data/Hora
             DateTimeFormatter formatadorData = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            
+
             // Registar Data/Hora de Início em GMT-0
             ZonedDateTime horaInicio = ZonedDateTime.now(ZoneId.of("UTC"));
             String startTimestamp = horaInicio.format(formatadorData);
@@ -159,16 +166,16 @@ public class Main {
 
             // 4. GUARDAR NO EXCEL
             String dbNameStr = targetDb.equals("1") ? "ArangoDB" : "Outra";
-            
+
             // Passar os timestamps de início e fim para a classe MetricsExporter
             MetricsExporter.saveToExcel(
-                dbNameStr, 
-                datasetSelecionado, 
-                nomeSchema, 
-                startTimestamp, 
-                endTimestamp, 
-                durationMs, 
-                dbSizeBytes
+                    dbNameStr,
+                    datasetSelecionado,
+                    nomeSchema,
+                    startTimestamp,
+                    endTimestamp,
+                    durationMs,
+                    dbSizeBytes
             );
 
         } catch (Exception e) {
@@ -177,22 +184,110 @@ public class Main {
         }
     }
 
+    // --- OPÇÂO 3: Executar Benchmark RFI
+    
+    // --- OPÇÃO 3: EXECUTAR BENCHMARK RFI (DIAGNÓSTICO ESTRUTURAL) ---
+    private static void menuExecutarBenchmarkRFI(Scanner scanner) {
+        System.out.println("\n--- MODO RFI: DIAGNÓSTICO ESTRUTURAL (1 THREAD) ---");
+
+        // Ligação dedicada para o Modo RFI (apenas 1 ligação necessária)
+        com.arangodb.ArangoDB ArangoRFI = new com.arangodb.ArangoDB.Builder()
+                .host("127.0.0.1", 8529).user("root").password("password").build();
+
+        try {
+            // 1. LISTAR BASES DE DADOS DISPONÍVEIS
+            System.out.println("A procurar esquemas (bases de dados) no servidor...");
+            java.util.Collection<String> databases = ArangoRFI.getDatabases();
+            java.util.List<String> userDbs = new java.util.ArrayList<>();
+
+            int counter = 1;
+            for (String dbName : databases) {
+                if (!dbName.equals("_system")) { 
+                    System.out.println("  " + counter + ". " + dbName);
+                    userDbs.add(dbName);
+                    counter++;
+                }
+            }
+
+            if (userDbs.isEmpty()) {
+                System.out.println("[ERRO] Nenhuma base de dados encontrada! Faça a ingestão primeiro.");
+                return;
+            }
+
+            // 2. ESCOLHER O ESQUEMA
+            System.out.print("\nEscolha o número do esquema a testar: ");
+            int dbChoice = -1;
+            try {
+                dbChoice = Integer.parseInt(scanner.nextLine().trim()) - 1;
+            } catch (NumberFormatException e) {
+                System.out.println("Entrada inválida. Operação cancelada.");
+                return;
+            }
+
+            if (dbChoice < 0 || dbChoice >= userDbs.size()) {
+                System.out.println("Opção inválida. Operação cancelada.");
+                return;
+            }
+
+            String dbAlvo = userDbs.get(dbChoice);
+            System.out.println("-> Esquema Selecionado: " + dbAlvo);
+            com.arangodb.ArangoDatabase dbConnection = ArangoRFI.db(dbAlvo);
+
+            // 3. SELECIONAR A QUERY DE STRESS RFI
+            System.out.println("\nSelecione a Consulta (Query) para o Teste RFI:");
+            System.out.println("5.  Consulta 5 (Travessia Linear Extrema - 299 Níveis)");
+            System.out.println("8.  Consulta 8 (Colisão Semântica - Grafo + KV + Documento)");
+            System.out.println("10. Consulta 10 (Agregação de Caminhos Redundantes - Diamantes de Memória)");
+            System.out.print("Escolha a Query a isolar (ex: 5): ");
+            String queryChoice = scanner.nextLine().trim();
+
+            // 4. CONFIGURAR COLD VS WARM RUNS
+            System.out.print("Quantas iterações 'Warm' (Quentes) deseja executar após o 'Cold Run'? (ex: 5): ");
+            int warmRuns;
+            try {
+                warmRuns = Integer.parseInt(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                warmRuns = 5; // Default seguro
+                System.out.println("Entrada inválida. A assumir 5 Warm Runs por defeito.");
+            }
+
+            System.out.println("\n-> A iniciar Teste RFI para a Query " + queryChoice + "...");
+            System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa.");
+
+           // 5. DELEGAR EXECUÇÃO PARA O MOTOR
+            BenchmarkEngine engine = new BenchmarkEngine();
+            
+           //TODO -> ATENÇÃO QUE DEPOIS TENHO DE POR AS QUERIES DINÂMICAS PARA OS VARIADOS SF
+            // Faz o harvesting dos IDs (ex: "500_sf1") para a memória da aplicação
+            engine.warmUpAndHarvest(dbConnection);
+            
+            // Orquestra o RFI com os dados carregados
+            engine.runRFI(dbConnection, queryChoice, warmRuns);
+            
 
 
- // --- OPÇÃO 3: EXECUTAR BENCHMARK CONCORRENTE ---
-    private static void menuExecutarBenchmark(Scanner scanner) {
+        } catch (Exception e) {
+            System.out.println("[ERRO] Falha ao executar o Modo RFI: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            ArangoRFI.shutdown();
+        }
+    }
+    
+    // --- OPÇÃO 4: EXECUTAR BENCHMARK CONCORRENTE ---
+    private static void menuExecutarBenchmarkConcorrente(Scanner scanner) {
         System.out.println("\n--- AMBIENTE DE BENCHMARK CONCORRENTE (100 CLIENTES) ---");
-        
+
         // Configuração de ligação rápida para validação do estado ativo
         com.arangodb.ArangoDB TestArango = new com.arangodb.ArangoDB.Builder()
                 .host("127.0.0.1", 8529).user("root").password("password").maxConnections(150).build();
-        
+
         try {
             // 1. LISTAR BASES DE DADOS DISPONÍVEIS
             System.out.println("A procurar bases de dados no servidor...");
             java.util.Collection<String> databases = TestArango.getDatabases();
             java.util.List<String> userDbs = new java.util.ArrayList<>();
-            
+
             int counter = 1;
             for (String dbName : databases) {
                 if (!dbName.equals("_system")) { // Esconde a BD nativa do sistema
@@ -226,7 +321,7 @@ public class Main {
 
             com.arangodb.ArangoDatabase dbConnection = TestArango.db(dbAlvo);
             BenchmarkEngine engine = new BenchmarkEngine();
-            
+
             // Fase 1: Harvesting de parâmetros em memória
             engine.warmUpAndHarvest(dbConnection);
 
@@ -237,7 +332,7 @@ public class Main {
             System.out.print("Escolha uma opção (1-3): ");
             String perfilOpcao = scanner.nextLine().trim();
 
-           String perfilNome;
+            String perfilNome;
             // Vetores de probabilidade correspondentes às 10 queries (a soma de cada vetor dá 100%)
             // JUSTIFICAÇÃO METODOLÓGICA GERAL:
             // Q1 a Q4: Carga Leve/Simples (Primitivas O(1) e travessias 1-hop).
@@ -254,9 +349,8 @@ public class Main {
                  * - Q10 (0%): Excluída cirurgicamente. Sendo uma agregação global complexa, causaria "Thread Starvation" 
                  * (bloqueio da CPU) e arruinaria a medição da latência das operações simples.
                  */
-                distribuicaoProbabilidades = new int[]{25, 25, 25, 20, 1, 1, 1, 1, 1, 0}; 
-            } 
-            else if (perfilOpcao.equals("2")) {
+                distribuicaoProbabilidades = new int[]{25, 25, 25, 20, 1, 1, 1, 1, 1, 0};
+            } else if (perfilOpcao.equals("2")) {
                 perfilNome = "MIX_50_50_EQUILIBRADO";
                 /*
                  * PERFIL 2 (50-50): Cenário misto HTAP (Transacional e Analítico em igualdade de concorrência).
@@ -266,8 +360,7 @@ public class Main {
                  * quando há queries de topo em execução.
                  */
                 distribuicaoProbabilidades = new int[]{15, 15, 10, 10, 10, 10, 10, 10, 5, 5};
-            } 
-            else if (perfilOpcao.equals("3")) {
+            } else if (perfilOpcao.equals("3")) {
                 perfilNome = "MIX_5_SIMPLES_95_STRESS_RECURSIVO";
                 /*
                  * PERFIL 3 (5-95): Teste de Stress Extremo (Foco na Tail Latency P99 e Resource Footprint Index - RFI).
@@ -277,8 +370,7 @@ public class Main {
                  * e o Garbage Collector para testar o ponto de colapso (breakdown point) do otimizador nativo.
                  */
                 distribuicaoProbabilidades = new int[]{2, 1, 1, 1, 20, 20, 20, 15, 10, 10};
-            } 
-            else {
+            } else {
                 System.out.println("Opção inválida.");
                 // O TestArango.shutdown() e return devem estar geridos pelo método que os envolve
                 return;
