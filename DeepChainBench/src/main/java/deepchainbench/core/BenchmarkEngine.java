@@ -5,6 +5,7 @@ import com.arangodb.ArangoDatabase;
 import deepchainbench.generator.GraphGenerator;
 import java.util.*;
 import java.util.concurrent.*;
+import com.arangodb.model.AqlQueryOptions;
 
 public class BenchmarkEngine {
 
@@ -186,7 +187,7 @@ public class BenchmarkEngine {
         System.out.println("Tempo Total de Carga: " + (tempoTotalMs / 1000.0) + " segundos");
         System.out.println("===============================================================");
     }
-
+//TODO: ESTE METODO ESTÁ ACOPOLADO AO ARANGO, DEPOIS VOU TER DE CRIAR ABSTRAÇÃO PARA ESCALAR O CÓDIGO
  /**
      * Executa o Modo RFI (Resource Footprint Index). Isola 1 Thread e mede o
      * Cold Run vs Warm Runs para testar o Memoization do Otimizador.
@@ -211,17 +212,6 @@ public class BenchmarkEngine {
         }
 
         String aqlQuery = QUERIES[index];
-
-//        // Selecionar o nó alvo para o RFI de forma inteligente.
-//        // Tenta focar no Nó 500 (raiz da Zona 2 - Cadeia Linear), se não encontrar, usa o primeiro da pool.
-//          Ideia descontinuada, vai ser usada mas para os testes de stress
-//        String targetKey = partKeysPool.get(0);
-//        for (String key : partKeysPool) {
-//            if (key.startsWith("500_")) { // Procura por ex: 500_sf1
-//                targetKey = key;
-//                break;
-//            }
-//        }
 
         final String[] TARGET_KEYS = {
             "15_sf1",  // Q1: Outlier de Titânio
@@ -249,52 +239,76 @@ public class BenchmarkEngine {
         System.out.println("-> Target Node (Key injetada): " + targetKey);
         System.out.println("-> AQL: " + aqlQuery);
 
-        // 1. Criar a assinatura única da sessão
+        // 1. Criar a assinatura única da sessão (já usa Epoch/UTC naturalmente via currentTimeMillis)
         String sessionTimestamp = String.valueOf(System.currentTimeMillis());
 
         // 2. Iniciar o Observador em Background
         String globalCsv = "./metrics/resultados_observador_" + sessionTimestamp + ".csv";
-        TelemetryEngine observador = new TelemetryEngine(globalCsv);
-   
+        
+        // ALTERAÇÃO 1: Instanciação específica para ArangoDB (Ajusta user/pass se necessário)
+        TelemetryEngine observador = new ArangoTelemetry(
+            globalCsv, 
+            "127.0.0.1", 
+            8529, 
+            db.name(), 
+            "root", 
+            "password"
+        );
+    
         Thread threadObservador = new Thread(observador);
         threadObservador.start();
 
         System.out.println("-> A gravar baseline global (Aguardando 2 segundos)...");
         try { Thread.sleep(2000); } catch (InterruptedException e) {}
+        
+        
 
         System.out.println("\n=========================================");
         System.out.println(" INICIANDO COLD RUN (RUN 1)");
         System.out.println("=========================================");
+        
+        AqlQueryOptions options = new AqlQueryOptions().profile(true);
 
-        // Captura EXATA da RAM antes da query
-        long ramAntesCold = TelemetryEngine.getSystemRamUsedMB();
+        // ALTERAÇÃO 2: Captura EXATA da RAM invocando o método da instância (API RocksDB)
+        double ramAntesCold = observador.getSystemRamUsedMB();
         System.out.println("Inicio ram: "+ramAntesCold);
         long tColdStart = System.currentTimeMillis();
         System.out.println("AQL -> "+aqlQuery+ " \n");
+        
+        double peakMemoryBytesCold = 0;
         try {
-            ArangoCursor<Map> coldCursor = db.query(aqlQuery, Map.class, bindVars);
+            
+            ArangoCursor<Map> coldCursor = db.query(aqlQuery, Map.class, bindVars, options);
             while (coldCursor.hasNext()) {
                 coldCursor.next();
             }
+            
+            // EXTRAÇÃO CIRÚRGICA DA RAM USADA PELA QUERY
+            if (coldCursor.getStats() != null) {
+                peakMemoryBytesCold = coldCursor.getStats().getPeakMemoryUsage();
+            }
+            
         } catch (Exception e) {
             System.err.println("Erro no Cold Run: " + e.getMessage());
         }
         
         long tColdEnd = System.currentTimeMillis();
-        // Captura EXATA da RAM depois da query
-        long ramDepoisCold = TelemetryEngine.getSystemRamUsedMB();
+        // ALTERAÇÃO 3: RAM pós query via instância
+        double ramDepoisCold = observador.getSystemRamUsedMB();
         System.out.println("Fim ram: "+ramDepoisCold);
 
         long coldRunTime = (tColdEnd - tColdStart);
-        long deltaRamCold = ramDepoisCold - ramAntesCold;
-        double rfiCold = (double) deltaRamCold / depth; // Cálculo exato do RFI
+        
+        double queryRamMB = peakMemoryBytesCold / (1024.0 * 1024.0);
+        
+        double deltaRamCold = queryRamMB;
+        double rfiCold = (double) deltaRamCold / depth; 
 
         System.out.println("Cold Run Tempo: " + coldRunTime + " ms | Delta RAM: " + deltaRamCold + " MB | RFI: " + rfiCold);
 
         String coldStartStr = String.valueOf(tColdStart);
         String coldEndStr = String.valueOf(tColdEnd);
 
-        // Atualiza a chamada para enviar o Start, End, Delta RAM e RFI
         MetricsExporter.saveRFIRun(sessionTimestamp, "ArangoDB", db.name(), queryId, targetKey, "Cold", coldStartStr, coldEndStr, coldRunTime, index, deltaRamCold, rfiCold);
 
         System.out.println("\n=========================================");
@@ -303,58 +317,54 @@ public class BenchmarkEngine {
 
         for (int i = 1; i <= warmRuns; i++) {
 
-            // Captura EXATA da RAM antes da query
-            long ramAntesWarm = TelemetryEngine.getSystemRamUsedMB();
+            // ALTERAÇÃO 4: RAM pré warm-run via instância
+            double ramAntesWarm = observador.getSystemRamUsedMB();
             System.out.println("Inicio ram warm: "+ramAntesWarm);
             
             long tWarmStart = System.currentTimeMillis();
-
+            double peakMemoryBytesWarm = 0;
             try {
-                ArangoCursor<Map> warmCursor = db.query(aqlQuery, Map.class, bindVars);
+                ArangoCursor<Map> warmCursor = db.query(aqlQuery, Map.class, bindVars, options);
                 while (warmCursor.hasNext()) {
                     warmCursor.next();
                 }
+                // EXTRAÇÃO CIRÚRGICA DA RAM USADA PELA QUERY
+            if (warmCursor.getStats() != null) {
+                peakMemoryBytesWarm = warmCursor.getStats().getPeakMemoryUsage();
+            }
             } catch (Exception e) {
                 System.err.println("Erro no Warm Run " + i + ": " + e.getMessage());
             }
 
             long tWarmEnd = System.currentTimeMillis();
-            // Captura EXATA da RAM depois da query
-            long ramDepoisWarm = TelemetryEngine.getSystemRamUsedMB();
+            // ALTERAÇÃO 5: RAM pós warm-run via instância
+            double ramDepoisWarm = observador.getSystemRamUsedMB();
             System.out.println("Fim ram warm: "+ramDepoisWarm);
             
             long warmTime = (tWarmEnd - tWarmStart);
-            long deltaRamWarm = ramDepoisWarm - ramAntesWarm;
-            double rfiWarm = (double) deltaRamWarm / depth; // Cálculo exato do RFI
+            queryRamMB = peakMemoryBytesWarm / (1024.0 * 1024.0);
+            double deltaRamWarm = queryRamMB;
+            double rfiWarm = (double) deltaRamWarm / depth; 
 
             System.out.println("Warm Run " + i + " Tempo: " + warmTime + " ms | Delta RAM: " + deltaRamWarm + " MB | RFI: " + rfiWarm);
 
             String warmStartStr = String.valueOf(tWarmStart);
             String warmEndStr = String.valueOf(tWarmEnd);
 
-            // Atualiza a chamada para enviar o Start, End, Delta RAM e RFI
             MetricsExporter.saveRFIRun(sessionTimestamp, "ArangoDB", db.name(), queryId, targetKey, "Warm_" + i, warmStartStr, warmEndStr, warmTime, index, deltaRamWarm, rfiWarm);
         }
 
-        // Desligar o observador após capturar o rescaldo (warm-down)
         System.out.println("-> A gravar cooldown global (Aguardando 1 segundo)...");
         try { Thread.sleep(1000); } catch (InterruptedException e) {}
         observador.stopEngine();
         
-        //CRAR O GRAFICO
-        
-        // Aguarda 100ms extra apenas para garantir que o SO fechou o ficheiro do observador em disco
         try { Thread.sleep(100); } catch (InterruptedException e) {}
 
-        // 1. Reconstruir o nome exato do ficheiro gerado pelo MetricsExporter
-        // Nota: O teu exporter soma +1 ao index para criar o QueryID (ex: index 4 -> Q5)
         int queryNum = index + 1; 
-        String rfiCsv = "./metrics/rfi_metrics_QUERY-" + queryNum + "_" + db.name().toLowerCase() + "_" + sessionTimestamp + ".csv";
+        String rfiCsv = "./metrics/rfi_metrics_QUERY-" + queryNum + "_arangodb_" + sessionTimestamp + ".csv";
         
-        // 2. Definir o nome do PNG final
         String pngPath = "./metrics/grafico_RFI_Q" + queryNum + "_" + sessionTimestamp;
 
-        // 3. Chamar a classe geradora do gráfico
         System.out.println("-> A gerar gráfico de telemetria...");
         GraphGenerator.createRFIChart(globalCsv, rfiCsv, pngPath);
 

@@ -129,7 +129,7 @@ public class MetricsExporter {
 //        }
 //    }
 
-public static void saveRFIRun(String sessionTimestamp, String engine, String schema, String queryId, String targetKey, String runType, String startTimestamp, String endTimestamp, long latencyMs, int numQuery, long deltaRam, double rfi) {
+public static void saveRFIRun(String sessionTimestamp, String engine, String schema, String queryId, String targetKey, String runType, String startTimestamp, String endTimestamp, long latencyMs, int numQuery, double deltaRam, double rfi) {
         try {
             java.io.File dir = new java.io.File("./metrics");
             if (!dir.exists()) {
@@ -147,7 +147,7 @@ public static void saveRFIRun(String sessionTimestamp, String engine, String sch
                 }
 
                 // Grava a linha formatada (%.4f para guardar o RFI com 4 casas decimais)
-                fw.append(String.format(java.util.Locale.US, "%s,%s,%s,%s,Q%s,%s,%s,%d,%d,%.4f\n",
+                fw.append(String.format(java.util.Locale.US, "%s,%s,%s,%s,Q%s,%s,%s,%d,%.6f,%.4f\n",
                         startTimestamp, endTimestamp, engine, schema, queryId, targetKey, runType, latencyMs, deltaRam, rfi));
             }
         } catch (Exception e) {
