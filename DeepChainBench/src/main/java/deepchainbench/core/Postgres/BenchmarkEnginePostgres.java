@@ -20,13 +20,20 @@ import java.util.regex.Pattern;
 public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection> {
 
     private String graphName = "deepchaindb";
-    private final String qualityTable = graphName + "_quality_kv";
-    private final String telemetryTable = graphName + "_telemetry";
+    private String qualityTable;
+    private String telemetryTable;
 
-    public BenchmarkEnginePostgres() {}
+    public BenchmarkEnginePostgres() {
+        this.qualityTable = this.graphName + "_quality_kv";
+        this.telemetryTable = this.graphName + "_telemetry";
+        initQueries();
+    }
 
     public BenchmarkEnginePostgres(String graphName) {
         this.graphName = graphName.toLowerCase();
+        this.qualityTable = this.graphName + "_quality_kv";
+        this.telemetryTable = this.graphName + "_telemetry";
+        initQueries();
     }
 
     @Override
@@ -337,9 +344,9 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
     public void limparDadosTemporarios(Connection db) {
         System.out.println("\n-> A INICIAR LIMPEZA DE DADOS TEMPORÁRIOS (HTAP) no Postgres...");
         String[] cleanupQueries = {
-            "SELECT * FROM cypher('" + graphName + "', $$ MATCH ()-[e:BoM]->() WHERE e.is_temp = true DELETE e $$, 'null'::agtype) AS (a agtype)",
+            "SELECT * FROM cypher('" + graphName + "', $$ MATCH ()-[e:BoM]->() WHERE e.is_temp = true DELETE e $$) AS (a agtype)",
             "UPDATE " + qualityTable + " SET value = value - 'is_temp' - 'diamond_hits' WHERE value->>'is_temp' = 'true'",
-            "SELECT * FROM cypher('" + graphName + "', $$ MATCH (p:Part) WHERE p.is_temp = true REMOVE p.last_inspected, p.is_temp $$, 'null'::agtype) AS (a agtype)",
+            "SELECT * FROM cypher('" + graphName + "', $$ MATCH (p:Part) WHERE p.is_temp = true REMOVE p.last_inspected, p.is_temp $$) AS (a agtype)",
             "UPDATE " + telemetryTable + " SET data = jsonb_set(data - 'is_temp', '{anomaly}', 'false'::jsonb) WHERE data->>'is_temp' = 'true'"
         };
         for (int i = 0; i < cleanupQueries.length; i++) {
@@ -352,36 +359,43 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
         System.out.println("-> Limpeza concluída! Base de dados restaurada para o estado de avaliação.");
     }
 
-    private static final String[] QUERIES_STRESS_TEST_READ = {
-        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material, q.value->>'cert' AS cert FROM cypher('deepchaindb', $$ MATCH (p:Part {id: $key_base}) RETURN p.id, p.material $$, ?) AS (id agtype, material agtype) JOIN deepchaindb_quality_kv q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"'",
-        "SELECT t.id, t.data->>'part_name' as nome, log->>'ts' as tempo, log->>'v' as temp, t.data->>'anomaly' as anomalia FROM deepchaindb_telemetry t, jsonb_array_elements(t.data->'sensor_logs') as log WHERE t.data->>'part_id' = ? ORDER BY (log->>'ts')::numeric ASC",
-        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id $$, ?) AS (id agtype)",
-        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material, q.value->>'cert' AS cert FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id, v.material $$, ?) AS (id agtype, material agtype) JOIN deepchaindb_quality_kv q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"' WHERE q.value->>'cert' = 'Tipo B'",
-        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) RETURN v.id $$, ?) AS (id agtype)",
-        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) WHERE v.material = 'Titânio' RETURN v.id, v.material $$, ?) AS (id agtype, material agtype)",
-        "SELECT AVG((log->>'v')::numeric) as media FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) RETURN v.id $$, ?) AS (id agtype) JOIN deepchaindb_telemetry t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' CROSS JOIN jsonb_array_elements(t.data->'sensor_logs') as log",
-        "SELECT ag_catalog.agtype_to_text(id) as id, q.value->>'cert' AS cert, (log->>'v')::numeric as temperatura FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(p:Part) WHERE p.material = 'Titânio' RETURN p.id $$, ?) AS (id agtype) JOIN deepchaindb_quality_kv q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"' JOIN deepchaindb_telemetry t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' CROSS JOIN jsonb_array_elements(t.data->'sensor_logs') as log WHERE q.value->>'cert' = 'Tipo B' AND t.data->>'anomaly' = 'true' AND (log->>'v')::numeric > 92.0",
-        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('deepchaindb', $$ MATCH (leaf:Part {id: $key_base})-[:BoM*1..299]->(v:Part) RETURN v.id $$, ?) AS (id agtype)",
-        "SELECT ag_catalog.agtype_to_text(path) as path, t.data->>'anomaly' as anomalia FROM cypher('deepchaindb', $$ MATCH p=(root:Part {id: $key_base})<-[:BoM*1..10]-(v:Part) RETURN [n IN nodes(p) | n.id], v.id $$, ?) AS (path agtype, id agtype) JOIN deepchaindb_telemetry t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' WHERE t.data->>'anomaly' = 'true'"
+    private String[] QUERIES_STRESS_TEST_READ;
+    private String[] QUERIES_WRITE;
+    private String[] QUERIES_RFI;
+
+    private void initQueries() {
+        QUERIES_STRESS_TEST_READ = new String[] {
+        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material, q.value->>'cert' AS cert FROM cypher('" + graphName + "', $$ MATCH (p:Part {id: $key_base}) RETURN p.id, p.material $$, ?) AS (id agtype, material agtype) JOIN " + qualityTable + " q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"'",
+        "SELECT t.id, t.data->>'part_name' as nome, log->>'ts' as tempo, log->>'v' as temp, t.data->>'anomaly' as anomalia FROM " + telemetryTable + " t, jsonb_array_elements(t.data->'sensor_logs') as log WHERE t.data->>'part_id' = ? ORDER BY (log->>'ts')::numeric ASC",
+        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id $$, ?) AS (id agtype)",
+        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material, q.value->>'cert' AS cert FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id, v.material $$, ?) AS (id agtype, material agtype) JOIN " + qualityTable + " q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"' WHERE q.value->>'cert' = 'Tipo B'",
+        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) RETURN v.id $$, ?) AS (id agtype)",
+        "SELECT ag_catalog.agtype_to_text(id) as id, ag_catalog.agtype_to_text(material) as material FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) WHERE v.material = 'Titânio' RETURN v.id, v.material $$, ?) AS (id agtype, material agtype)",
+        "SELECT AVG((log->>'v')::numeric) as media FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) RETURN v.id $$, ?) AS (id agtype) JOIN " + telemetryTable + " t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' CROSS JOIN jsonb_array_elements(t.data->'sensor_logs') as log",
+        "SELECT ag_catalog.agtype_to_text(id) as id, q.value->>'cert' AS cert, (log->>'v')::numeric as temperatura FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(p:Part) WHERE p.material = 'Titânio' RETURN p.id $$, ?) AS (id agtype) JOIN " + qualityTable + " q ON ag_catalog.agtype_to_text(id) = '\"' || q.key || '\"' JOIN " + telemetryTable + " t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' CROSS JOIN jsonb_array_elements(t.data->'sensor_logs') as log WHERE q.value->>'cert' = 'Tipo B' AND t.data->>'anomaly' = 'true' AND (log->>'v')::numeric > 92.0",
+        "SELECT ag_catalog.agtype_to_text(id) as id FROM cypher('" + graphName + "', $$ MATCH (leaf:Part {id: $key_base})-[:BoM*1..299]->(v:Part) RETURN v.id $$, ?) AS (id agtype)",
+        "SELECT ag_catalog.agtype_to_text(path) as path, t.data->>'anomaly' as anomalia FROM cypher('" + graphName + "', $$ MATCH p=(root:Part {id: $key_base})<-[:BoM*1..10]-(v:Part) RETURN [n IN nodes(p) | n.id], v.id $$, ?) AS (path agtype, id agtype) JOIN " + telemetryTable + " t ON ag_catalog.agtype_to_text(id) = '\"' || (t.data->>'part_id') || '\"' WHERE t.data->>'anomaly' = 'true'"
     };
 
-    private static final String[] QUERIES_WRITE = {
-        "UPDATE deepchaindb_quality_kv SET value = jsonb_set(jsonb_set(jsonb_set(value, '{cert}', ?::jsonb), '{score}', ?::jsonb), '{is_temp}', 'true'::jsonb) WHERE key = ?",
-        "UPDATE deepchaindb_telemetry SET data = jsonb_set(data, '{sensor_logs}', (data->'sensor_logs') || ?::jsonb) WHERE data->>'part_id' = ?",
-        "SELECT * FROM cypher('deepchaindb', $$ MATCH (p:Part {id: $key_base}) SET p.material = $novo_material, p.is_temp = true $$, ?) AS (a agtype)",
-        "WITH t AS (UPDATE deepchaindb_telemetry SET data = jsonb_set(jsonb_set(data, '{anomaly}', 'true'::jsonb), '{is_temp}', 'true'::jsonb) WHERE data->>'part_id' = ? RETURNING 1) UPDATE deepchaindb_quality_kv SET value = jsonb_set(jsonb_set(jsonb_set(value, '{cert}', '\"Revogado\"'::jsonb), '{score}', '0'::jsonb), '{is_temp}', 'true'::jsonb) WHERE key = ?",
-        "SELECT * FROM cypher('deepchaindb', $$ MATCH (from_node:Part {id: $from_id}), (to_node:Part {id: $to_id}) CREATE (from_node)-[:BoM {qty: 1, type: 'redundant', is_temp: true}]->(to_node) $$, ?) AS (a agtype)",
-        "SELECT * FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})-[e:BoM]->() SET e.qty = e.qty + 1, e.is_temp = true $$, ?) AS (a agtype)",
-        "UPDATE deepchaindb_quality_kv SET value = jsonb_set(jsonb_set(value, '{cert}', '\"Em Revisão\"'::jsonb), '{is_temp}', 'true'::jsonb) WHERE '\"' || key || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id $$, ?) AS (id agtype))",
-        "UPDATE deepchaindb_telemetry SET data = jsonb_set(jsonb_set(jsonb_set(data, '{anomaly}', 'true'::jsonb), '{is_temp}', 'true'::jsonb), '{sensor_logs}', (data->'sensor_logs') || ?::jsonb) WHERE '\"' || (data->>'part_id') || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) WHERE v.material = 'Titânio' RETURN v.id $$, ?) AS (id agtype))",
-        "SELECT * FROM cypher('deepchaindb', $$ MATCH (leaf:Part {id: $key_base})-[:BoM*1..299]->(v:Part) SET v.last_inspected = $ts, v.is_temp = true $$, ?) AS (a agtype)",
-        "UPDATE deepchaindb_quality_kv SET value = jsonb_set(jsonb_set(value, '{diamond_hits}', (COALESCE((value->>'diamond_hits')::int, 0) + 1)::text::jsonb), '{is_temp}', 'true'::jsonb) WHERE '\"' || key || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('deepchaindb', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..10]-(v:Part) RETURN v.id $$, ?) AS (id agtype))"
+    QUERIES_WRITE = new String[] {
+        "UPDATE " + qualityTable + " SET value = jsonb_set(jsonb_set(jsonb_set(value, '{cert}', ?::jsonb), '{score}', ?::jsonb), '{is_temp}', 'true'::jsonb) WHERE key = ?",
+        "UPDATE " + telemetryTable + " SET data = jsonb_set(data, '{sensor_logs}', (data->'sensor_logs') || ?::jsonb) WHERE data->>'part_id' = ?",
+        "SELECT * FROM cypher('" + graphName + "', $$ MATCH (p:Part {id: $key_base}) SET p.material = $novo_material, p.is_temp = true $$, ?) AS (a agtype)",
+        "WITH t AS (UPDATE " + telemetryTable + " SET data = jsonb_set(jsonb_set(data, '{anomaly}', 'true'::jsonb), '{is_temp}', 'true'::jsonb) WHERE data->>'part_id' = ? RETURNING 1) UPDATE " + qualityTable + " SET value = jsonb_set(jsonb_set(jsonb_set(value, '{cert}', '\"Revogado\"'::jsonb), '{score}', '0'::jsonb), '{is_temp}', 'true'::jsonb) WHERE key = ?",
+        "SELECT * FROM cypher('" + graphName + "', $$ MATCH (from_node:Part {id: $from_id}), (to_node:Part {id: $to_id}) CREATE (from_node)-[:BoM {qty: 1, type: 'redundant', is_temp: true}]->(to_node) $$, ?) AS (a agtype)",
+        "SELECT * FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})-[e:BoM]->() SET e.qty = e.qty + 1, e.is_temp = true $$, ?) AS (a agtype)",
+        "UPDATE " + qualityTable + " SET value = jsonb_set(jsonb_set(value, '{cert}', '\"Em Revisão\"'::jsonb), '{is_temp}', 'true'::jsonb) WHERE '\"' || key || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM]-(v:Part) RETURN v.id $$, ?) AS (id agtype))",
+        "UPDATE " + telemetryTable + " SET data = jsonb_set(jsonb_set(jsonb_set(data, '{anomaly}', 'true'::jsonb), '{is_temp}', 'true'::jsonb), '{sensor_logs}', (data->'sensor_logs') || ?::jsonb) WHERE '\"' || (data->>'part_id') || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..299]-(v:Part) WHERE v.material = 'Titânio' RETURN v.id $$, ?) AS (id agtype))",
+        "SELECT * FROM cypher('" + graphName + "', $$ MATCH (leaf:Part {id: $key_base})-[:BoM*1..299]->(v:Part) SET v.last_inspected = $ts, v.is_temp = true $$, ?) AS (a agtype)",
+        "UPDATE " + qualityTable + " SET value = jsonb_set(jsonb_set(value, '{diamond_hits}', (COALESCE((value->>'diamond_hits')::int, 0) + 1)::text::jsonb), '{is_temp}', 'true'::jsonb) WHERE '\"' || key || '\"' IN (SELECT ag_catalog.agtype_to_text(id) FROM cypher('" + graphName + "', $$ MATCH (root:Part {id: $key_base})<-[:BoM*1..10]-(v:Part) RETURN v.id $$, ?) AS (id agtype))"
     };
 
-    private static final String[] QUERIES_RFI = {
+    QUERIES_RFI = new String[] {
         QUERIES_STRESS_TEST_READ[0], QUERIES_STRESS_TEST_READ[1], QUERIES_STRESS_TEST_READ[2],
         QUERIES_STRESS_TEST_READ[3], QUERIES_STRESS_TEST_READ[4], QUERIES_STRESS_TEST_READ[5],
         QUERIES_STRESS_TEST_READ[6], QUERIES_STRESS_TEST_READ[7], QUERIES_STRESS_TEST_READ[8],
         QUERIES_STRESS_TEST_READ[9]
     };
+    }
+
 }

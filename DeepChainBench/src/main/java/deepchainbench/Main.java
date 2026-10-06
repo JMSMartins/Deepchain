@@ -23,7 +23,7 @@ public class Main {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
-        while (true) {
+        while (scanner.hasNextLine()) {
             System.out.println("\n=========================================");
             System.out.println("       DEEPCHAIN BENCHMARK SYSTEM        ");
             System.out.println("=========================================");
