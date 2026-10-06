@@ -21,6 +21,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.chart.plot.PlotOrientation;
+
 public class GraphGenerator {
 
     // Classe auxiliar para guardar as janelas de tempo
@@ -46,7 +49,7 @@ public class GraphGenerator {
                 if (parts.length >= 3) {
                     long ts = Long.parseLong(parts[0].trim());
                     double cpu = Double.parseDouble(parts[1].trim());
-                    long ram = Long.parseLong(parts[2].trim());
+                    double ram = Double.parseDouble(parts[2].trim());
                     
                     cpuSeries.add(ts, cpu);
                     ramSeries.add(ts, ram);
@@ -129,6 +132,108 @@ public class GraphGenerator {
                 marker.setPaint(new Color(255, 255, 0, 80)); // Amarelo (Warm Runs)
             }
             plot.addDomainMarker(marker); // Aplica a janela ao gráfico
+        }
+    }
+
+
+    // ====================================================================
+    // NOVOS GRÁFICOS HTAP (Latências e Sucesso vs Falha)
+    // ====================================================================
+    public static void createHTAPCharts(String latencyCsv, String outputPathBase) {
+        XYSeries readSeries = new XYSeries("Latência de Leitura (ms)");
+        XYSeries writeSeries = new XYSeries("Latência de Escrita (ms)");
+
+        int readSuccess = 0, readFail = 0;
+        int writeSuccess = 0, writeFail = 0;
+
+        // 1. Processar os dados do CSV
+        try (BufferedReader br = new BufferedReader(new FileReader(latencyCsv))) {
+            String line;
+            br.readLine(); // Ignorar o cabeçalho
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length >= 4) {
+                    long ts = Long.parseLong(parts[0].trim());
+                    String type = parts[1].trim();
+                    long latency = Long.parseLong(parts[2].trim());
+                    boolean success = Boolean.parseBoolean(parts[3].trim());
+
+                    if (type.equals("READ")) {
+                        if (success) {
+                            readSuccess++;
+                            readSeries.add(ts, latency); // Apenas latências com sucesso vão para a linha
+                        } else {
+                            readFail++;
+                        }
+                    } else if (type.equals("WRITE")) {
+                        if (success) {
+                            writeSuccess++;
+                            writeSeries.add(ts, latency);
+                        } else {
+                            writeFail++;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[ERRO] Falha ao ler CSV de latências: " + e.getMessage());
+            return;
+        }
+
+        System.out.println("-> A processar gráficos analíticos HTAP...");
+
+        // 2. Gráfico Linha: Leituras (Sucessos)
+        JFreeChart readLineChart = ChartFactory.createXYLineChart(
+                "Degradação de Performance: Leituras", "Tempo (Hora Local)", "Latência (ms)", 
+                new XYSeriesCollection(readSeries));
+        configurarEixoTempoSimples(readLineChart, Color.GREEN);
+        exportarGrafico(readLineChart, outputPathBase + "_Read_Latency.png");
+
+        // 3. Gráfico Linha: Escritas (Sucessos)
+        JFreeChart writeLineChart = ChartFactory.createXYLineChart(
+                "Degradação de Performance: Escritas (Locks)", "Tempo (Hora Local)", "Latência (ms)", 
+                new XYSeriesCollection(writeSeries));
+        configurarEixoTempoSimples(writeLineChart, Color.RED);
+        exportarGrafico(writeLineChart, outputPathBase + "_Write_Latency.png");
+
+        // 4. Gráfico Barras: Sucesso vs Falha (Leituras)
+        DefaultCategoryDataset readDataset = new DefaultCategoryDataset();
+        readDataset.addValue(readSuccess, "Leituras", "Sucesso");
+        readDataset.addValue(readFail, "Leituras", "Timeout / Falha");
+        JFreeChart readBarChart = ChartFactory.createBarChart(
+                "Confiabilidade das Leituras", "Estado", "Número de Queries", 
+                readDataset, PlotOrientation.VERTICAL, true, true, false);
+        exportarGrafico(readBarChart, outputPathBase + "_Read_Status_Bar.png");
+
+        // 5. Gráfico Barras: Sucesso vs Falha (Escritas)
+        DefaultCategoryDataset writeDataset = new DefaultCategoryDataset();
+        writeDataset.addValue(writeSuccess, "Escritas", "Sucesso");
+        writeDataset.addValue(writeFail, "Escritas", "Timeout / Lock Contention");
+        JFreeChart writeBarChart = ChartFactory.createBarChart(
+                "Confiabilidade das Escritas (Contenção)", "Estado", "Número de Queries", 
+                writeDataset, PlotOrientation.VERTICAL, true, true, false);
+        exportarGrafico(writeBarChart, outputPathBase + "_Write_Status_Bar.png");
+    }
+
+    // Métodos Auxiliares para evitar repetição
+    private static void configurarEixoTempoSimples(JFreeChart chart, Color lineColor) {
+        XYPlot plot = chart.getXYPlot();
+        plot.setBackgroundPaint(Color.WHITE);
+        plot.setDomainGridlinePaint(Color.LIGHT_GRAY);
+        plot.setRangeGridlinePaint(Color.LIGHT_GRAY);
+        plot.getRenderer().setSeriesPaint(0, lineColor);
+
+        DateAxis dateAxis = new DateAxis("Tempo (Hora Local)");
+        dateAxis.setDateFormatOverride(new SimpleDateFormat("HH:mm:ss.SSS"));
+        plot.setDomainAxis(dateAxis);
+    }
+
+    private static void exportarGrafico(JFreeChart chart, String path) {
+        try {
+            ChartUtils.saveChartAsPNG(new File(path), chart, 1200, 600);
+            System.out.println("   -> Exportado: " + path);
+        } catch (Exception e) {
+            System.err.println("   [ERRO] Falha ao exportar " + path);
         }
     }
 }

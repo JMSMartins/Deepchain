@@ -2,7 +2,7 @@ package deepchainbench;
 
 import java.io.File;
 import java.util.Scanner;
-import deepchainbench.core.BenchmarkEngine;
+import deepchainbench.core.Arango.BenchmarkEngineArango;
 import deepchainbench.core.DatabaseDriver;
 import deepchainbench.drivers.ArangoDriver;
 import deepchainbench.generator.Generator_data;
@@ -25,7 +25,7 @@ public class Main {
             System.out.println("1. Criar novo Dataset (Scale Factor)");
             System.out.println("2. Ingestão de Dados (Configurar Esquema e Carregar)");
             System.out.println("3. Executar Testes RFI (Benchmark de Queries)");
-            System.out.println("4. Executar Testes Concorrencia (Benchmark de Queries) (Não Implementado)");
+            System.out.println("4. Executar Testes Concorrencia (Benchmark de Queries) ");
             System.out.println("0. Sair");
             System.out.print("Escolha uma opção: ");
 
@@ -80,12 +80,13 @@ public class Main {
         System.out.println("Selecione a Base de Dados de Destino:");
         System.out.println("1. ArangoDB");
         System.out.println("2. OrientDB (Não implementado)");
-        System.out.println("3. PostgreSQL (Não implementado)");
+        System.out.println("3. PostgreSQL ");
         System.err.println("4. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
         DatabaseDriver driver = null;
+        String dbNameStr = "";
 
         try {
             if (targetDb.equals("1")) {
@@ -93,12 +94,17 @@ public class Main {
                 // Usa o teu IP real configurado
                 //driver.connect("192.168.0.103", 8529, "root", "password");
                 driver.connect("127.0.0.1", 8529, "root", "password");
+                dbNameStr = "ArangoDB";
             } else if (targetDb.equals("2")) {
                 System.out.println("O módulo OrientDB ainda não foi implementado.");
                 return;
             } else if (targetDb.equals("3")) {
-                System.out.println("O módulo PostgreSQL ainda não foi implementado.");
-                return;
+                // Instancia o teu PostgresAgeDriver (implementa DatabaseDriver)
+                driver = new deepchainbench.drivers.PostgresAgeDriver();
+                
+                driver.connect("127.0.0.1", 5432, "postgres", "password");
+                dbNameStr = "PostgreSQL_AGE";
+                
             } else if (targetDb.equals("4")) {
                 return;
             } else {
@@ -165,7 +171,7 @@ public class Main {
             System.out.printf("   Tempo total: %.2f segundos\n", (durationMs / 1000.0));
 
             // 4. GUARDAR NO EXCEL
-            String dbNameStr = targetDb.equals("1") ? "ArangoDB" : "Outra";
+           
 
             // Passar os timestamps de início e fim para a classe MetricsExporter
             MetricsExporter.saveToExcel(
@@ -185,7 +191,6 @@ public class Main {
     }
 
     // --- OPÇÂO 3: Executar Benchmark RFI
-    
     // --- OPÇÃO 3: EXECUTAR BENCHMARK RFI (DIAGNÓSTICO ESTRUTURAL) ---
     private static void menuExecutarBenchmarkRFI(Scanner scanner) {
         System.out.println("\n--- MODO RFI: DIAGNÓSTICO ESTRUTURAL (1 THREAD) ---");
@@ -202,7 +207,7 @@ public class Main {
 
             int counter = 1;
             for (String dbName : databases) {
-                if (!dbName.equals("_system")) { 
+                if (!dbName.equals("_system")) {
                     System.out.println("  " + counter + ". " + dbName);
                     userDbs.add(dbName);
                     counter++;
@@ -254,17 +259,15 @@ public class Main {
             System.out.println("\n-> A iniciar Teste RFI para a Query " + queryChoice + "...");
             System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa.");
 
-           // 5. DELEGAR EXECUÇÃO PARA O MOTOR
-            BenchmarkEngine engine = new BenchmarkEngine();
-            
-           //TODO -> ATENÇÃO QUE DEPOIS TENHO DE POR AS QUERIES DINÂMICAS PARA OS VARIADOS SF
+            // 5. DELEGAR EXECUÇÃO PARA O MOTOR
+            BenchmarkEngineArango engine = new BenchmarkEngineArango();
+
+            //TODO -> ATENÇÃO QUE DEPOIS TENHO DE POR AS QUERIES DINÂMICAS PARA OS VARIADOS SF
             // Faz o harvesting dos IDs (ex: "500_sf1") para a memória da aplicação
             engine.warmUpAndHarvest(dbConnection);
-            
+
             // Orquestra o RFI com os dados carregados
             engine.runRFI(dbConnection, queryChoice, warmRuns);
-            
-
 
         } catch (Exception e) {
             System.out.println("[ERRO] Falha ao executar o Modo RFI: " + e.getMessage());
@@ -273,10 +276,10 @@ public class Main {
             ArangoRFI.shutdown();
         }
     }
-    
-    // --- OPÇÃO 4: EXECUTAR BENCHMARK CONCORRENTE ---
+
+    // --- OPÇÃO 4: EXECUTAR BENCHMARK CONCORRENTE (HTAP) ---
     private static void menuExecutarBenchmarkConcorrente(Scanner scanner) {
-        System.out.println("\n--- AMBIENTE DE BENCHMARK CONCORRENTE (100 CLIENTES) ---");
+        System.out.println("\n--- AMBIENTE DE BENCHMARK CONCORRENTE HTAP ---");
 
         // Configuração de ligação rápida para validação do estado ativo
         com.arangodb.ArangoDB TestArango = new com.arangodb.ArangoDB.Builder()
@@ -290,7 +293,7 @@ public class Main {
 
             int counter = 1;
             for (String dbName : databases) {
-                if (!dbName.equals("_system")) { // Esconde a BD nativa do sistema
+                if (!dbName.equals("_system")) {
                     System.out.println("  " + counter + ". " + dbName);
                     userDbs.add(dbName);
                     counter++;
@@ -320,72 +323,74 @@ public class Main {
             System.out.println("-> Selecionada: " + dbAlvo);
 
             com.arangodb.ArangoDatabase dbConnection = TestArango.db(dbAlvo);
-            BenchmarkEngine engine = new BenchmarkEngine();
+            BenchmarkEngineArango engine = new BenchmarkEngineArango();
 
             // Fase 1: Harvesting de parâmetros em memória
             engine.warmUpAndHarvest(dbConnection);
 
-            System.out.println("\nSelecione o perfil de distribuição de carga:");
-            System.out.println("1. Perfil Linear / Simples Predominante (95% Operações Simples [Q1-Q4], 5% Recursivas [Q5-Q10])");
-            System.out.println("2. Perfil Equilibrado (50% Operações Simples, 50% Carga Recursiva Complexa)");
-            System.out.println("3. Perfil de Stress Extremo (5% Operações Simples, 95% Carga Recursiva Profunda/Analytics)");
+            System.out.println("\nSelecione o perfil de distribuição de carga (HTAP):");
+            System.out.println("1. Read-Heavy (95% Leituras Simples | 5% Escritas Atómicas) - Baseline");
+            System.out.println("2. Balanced (50% Leituras Mistas | 50% Escritas Mistas) - Lock Contention");
+            System.out.println("3. Analytical Stress (5% Leituras | 95% Escritas Topológicas e Recursivas) - Breakdown");
             System.out.print("Escolha uma opção (1-3): ");
             String perfilOpcao = scanner.nextLine().trim();
 
             String perfilNome;
-            // Vetores de probabilidade correspondentes às 10 queries (a soma de cada vetor dá 100%)
-            // JUSTIFICAÇÃO METODOLÓGICA GERAL:
-            // Q1 a Q4: Carga Leve/Simples (Primitivas O(1) e travessias 1-hop).
-            // Q5 a Q10: Carga Pesada/Recursiva (Profundidade N-1, agregações e cruzamentos multi-modelo).
-            int[] distribuicaoProbabilidades;
+            int readPercentage;
+            // O array DEVE somar 100. 
+            // Distribuição Zipfian s=1.0 para os 5 Níveis de Complexidade
+            int[] probsLeitura = {
+                22, 22, // Q1, Q2   (Nível 1 - 44%): Acesso Atómico e Telemetria Simples
+                11, 11, // Q3, Q4   (Nível 2 - 22%): 1-Hop e Filtro Qualidade
+                7, 7, // Q5, Q6   (Nível 3 - 14%): Travessia 299 Níveis e Early Pruning
+                6, 5, // Q7, Q8   (Nível 4 - 11%): Agregação Recursiva e Colisão Semântica
+                5, 4 // Q9, Q10  (Nível 5 -  9%): Reverse Graph e Explosão Combinatória
+            };
+
+            int[] probsEscrita = {
+                22, 22, // W1, W2   (Nível 1 - 44%): KV Update e IoT Append
+                11, 11, // W3, W4   (Nível 2 - 22%): Mutação Grafo e Colisão Síncrona
+                7, 7, // W5, W6   (Nível 3 - 14%): Insert Edge e Batch Update
+                6, 5, // W7, W8   (Nível 4 - 11%): 1-hop Cascade e Write Carrasco
+                5, 4 // W9, W10  (Nível 5 -  9%): Reverse Update e Memory Diamond Contention
+            };
 
             if (perfilOpcao.equals("1")) {
-                perfilNome = "MIX_95_LEITURA_SIMPLES_5_RECURSIVO";
-                /*
-                 * PERFIL 1 (95-5): Simula o "dia a dia" normal da fábrica para estabelecer a Baseline Latency.
-                 * - Q1, Q2, Q3 (25% cada): Operações mais frequentes de leitura direta (ex: bipar peça, ver histórico).
-                 * - Q4 (20%): Leva menos 5% porque exige filtro com cruzamento semântico (Graph+KV), logo é ligeiramente menos frequente.
-                 * - Q5 a Q9 (1% cada): "Ruído de Fundo". Impede o motor ArangoDB de viciar a cache de memória só com caminhos curtos, testando a arquitetura HTAP.
-                 * - Q10 (0%): Excluída cirurgicamente. Sendo uma agregação global complexa, causaria "Thread Starvation" 
-                 * (bloqueio da CPU) e arruinaria a medição da latência das operações simples.
-                 */
-                distribuicaoProbabilidades = new int[]{25, 25, 25, 20, 1, 1, 1, 1, 1, 0};
+                perfilNome = "MIX_95_READ_5_WRITE";
+                readPercentage = 95;
+
             } else if (perfilOpcao.equals("2")) {
-                perfilNome = "MIX_50_50_EQUILIBRADO";
-                /*
-                 * PERFIL 2 (50-50): Cenário misto HTAP (Transacional e Analítico em igualdade de concorrência).
-                 * - Metade do tráfego (15+15+10+10) garante uma pressão contínua de operações transacionais.
-                 * - A outra metade (10+10+10+10+5+5) força o otimizador a gerir travessias pesadas ao mesmo tempo.
-                 * - A Q10 entra aqui (5%) para permitir a medição da degradação de performance do sistema global 
-                 * quando há queries de topo em execução.
-                 */
-                distribuicaoProbabilidades = new int[]{15, 15, 10, 10, 10, 10, 10, 10, 5, 5};
+                perfilNome = "MIX_50_50_BALANCED";
+                readPercentage = 50;
+
             } else if (perfilOpcao.equals("3")) {
-                perfilNome = "MIX_5_SIMPLES_95_STRESS_RECURSIVO";
-                /*
-                 * PERFIL 3 (5-95): Teste de Stress Extremo (Foco na Tail Latency P99 e Resource Footprint Index - RFI).
-                 * - Q1 a Q4 (2+1+1+1): Reduzidas ao mínimo, servem apenas para forçar o processador a fazer "Context-Switches".
-                 * - Q5, Q6, Q7 (20% cada): Foco massivo na explosão recursiva e navegação linear profunda.
-                 * - Q9 e Q10 (10% cada): Representam o teto máximo computacional. Saturam deliberadamente a memória RAM 
-                 * e o Garbage Collector para testar o ponto de colapso (breakdown point) do otimizador nativo.
-                 */
-                distribuicaoProbabilidades = new int[]{2, 1, 1, 1, 20, 20, 20, 15, 10, 10};
+                perfilNome = "MIX_5_READ_95_WRITE_STRESS";
+                readPercentage = 5;
             } else {
-                System.out.println("Opção inválida.");
-                // O TestArango.shutdown() e return devem estar geridos pelo método que os envolve
+                System.out.println("Opção inválida. Operação cancelada.");
                 return;
             }
 
-            System.out.print("Introduza o número total de requisições a processar (ex: 5000): ");
-            int totalRequests = Integer.parseInt(scanner.nextLine().trim());
+            // Pedir o número de Clientes
+            System.out.print("Introduza o número de clientes concorrentes (ex: 100): ");
+            int numClientes;
+            try {
+                numClientes = Integer.parseInt(scanner.nextLine().trim());
+            } catch (Exception e) {
+                numClientes = 100;
+                System.out.println("Entrada inválida. A assumir 100 clientes por defeito.");
+            }
 
-            // Execução concorrente real disparada pelas 100 threads em simultâneo
-            engine.runWorkload(dbConnection, perfilNome, distribuicaoProbabilidades, totalRequests);
+            // Disparar a Worker Pool com todos os parâmetros!
+            engine.runWorkload(dbConnection, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
+            
+            // ---> É AQUI QUE USAS A LIMPEZA <---
+            // Limpa automaticamente o lixo HTAP no final do teste
+            engine.limparDadosTemporarios(dbConnection);
 
         } catch (Exception e) {
             System.out.println("[ERRO] Falha ao ligar ao ArangoDB ou ao executar o benchmark: " + e.getMessage());
         } finally {
-            // Garante que a ligação fecha sempre, mesmo que haja um erro a meio
             TestArango.shutdown();
         }
     }

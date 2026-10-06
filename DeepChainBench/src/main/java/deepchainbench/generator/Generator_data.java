@@ -401,7 +401,8 @@ public class Generator_data {
                     String line;
                     while ((line = br.readLine()) != null) {
                         // ALTERADO: Preservar o nome real durante o scaling
-                        String mod = line.replaceAll("\"part_id\":\\s*(\\d+)", "\"part_id\": \"$1_sf" + s + "\"");
+//                        String mod = line.replaceAll("\"part_id\":\\s*(\\d+)", "\"part_id\": \"$1_sf" + s + "\"");
+                        String mod = line.replaceAll("\"part_id\":\\s*\"(\\d+)_sf1\"", "\"part_id\": \"$1_sf" + s + "\"");
                         pw.println(mod);
                     }
                 }

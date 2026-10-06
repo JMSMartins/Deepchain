@@ -91,6 +91,32 @@ public class MetricsExporter {
         }
         return totalSize;
     }
+    
+    public static void saveHTAPSummary(String sessionTimestamp, String perfil, int clientes, int totalOps, double throughput, long p50, long p95, long p99, double tempoTotalSegundos, int falhasContencao) {
+        try {
+            java.io.File dir = new java.io.File("./metrics");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+
+            // O ficheiro será gravado na pasta raiz do 'metrics'
+            java.io.File file = new java.io.File(dir, "htap_summary_results.csv");
+            boolean isNewFile = !file.exists();
+
+            try (java.io.FileWriter fw = new java.io.FileWriter(file, true)) {
+                if (isNewFile) {
+                    fw.append("Session_Timestamp,Perfil,Clientes,Total_Operacoes,Throughput_ops_sec,P50_ms,P95_ms,P99_ms,Tempo_Total_segundos,Falhas_Contencao\n");
+                }
+
+                fw.append(String.format(java.util.Locale.US, "%s,%s,%d,%d,%.2f,%d,%d,%d,%.3f,%d\n",
+                        sessionTimestamp, perfil, clientes, totalOps, throughput, p50, p95, p99, tempoTotalSegundos, falhasContencao));
+            }
+            System.out.println("-> Resumo HTAP gravado no ficheiro mestre: " + file.getPath());
+
+        } catch (Exception e) {
+            System.err.println("[ERRO] Falha ao exportar resumo HTAP para CSV: " + e.getMessage());
+        }
+    }
 
 //    public static void saveRFIMetrics(String engine, String schema, String queryId, String targetKey, long coldRunTime, java.util.List<Long> warmRunTimes) {
 //        try {
@@ -129,7 +155,7 @@ public class MetricsExporter {
 //        }
 //    }
 
-public static void saveRFIRun(String sessionTimestamp, String engine, String schema, String queryId, String targetKey, String runType, String startTimestamp, String endTimestamp, long latencyMs, int numQuery, long deltaRam, double rfi) {
+public static void saveRFIRun(String sessionTimestamp, String engine, String schema, String queryId, String targetKey, String runType, String startTimestamp, String endTimestamp, long latencyMs, int numQuery, double deltaRam, double rfi) {
         try {
             java.io.File dir = new java.io.File("./metrics");
             if (!dir.exists()) {
@@ -147,7 +173,7 @@ public static void saveRFIRun(String sessionTimestamp, String engine, String sch
                 }
 
                 // Grava a linha formatada (%.4f para guardar o RFI com 4 casas decimais)
-                fw.append(String.format(java.util.Locale.US, "%s,%s,%s,%s,Q%s,%s,%s,%d,%d,%.4f\n",
+                fw.append(String.format(java.util.Locale.US, "%s,%s,%s,%s,Q%s,%s,%s,%d,%.6f,%.4f\n",
                         startTimestamp, endTimestamp, engine, schema, queryId, targetKey, runType, latencyMs, deltaRam, rfi));
             }
         } catch (Exception e) {
