@@ -20,13 +20,22 @@ import java.util.regex.Pattern;
 public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection> {
 
     private String graphName = "deepchaindb";
-    private final String qualityTable = graphName + "_quality_kv";
-    private final String telemetryTable = graphName + "_telemetry";
+    private String qualityTable;
+    private String telemetryTable;
 
-    public BenchmarkEnginePostgres() {}
+    public BenchmarkEnginePostgres() {
+        this.qualityTable = this.graphName + "_quality_kv";
+        this.telemetryTable = this.graphName + "_telemetry";
+    }
 
     public BenchmarkEnginePostgres(String graphName) {
         this.graphName = graphName.toLowerCase();
+        this.qualityTable = this.graphName + "_quality_kv";
+        this.telemetryTable = this.graphName + "_telemetry";
+    }
+
+    private String prepareQuery(String query) {
+        return query.replace("deepchaindb", this.graphName);
     }
 
     @Override
@@ -38,7 +47,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
                 stmt.execute("SET search_path = ag_catalog, \"$user\", public;");
             }
             long totalParts = 0;
-            String countSql = "SELECT count(*) FROM cypher('" + graphName + "', $$ MATCH (p:Part) RETURN p $$) AS (p agtype);";
+            String countSql = prepareQuery("SELECT count(*) FROM cypher('deepchaindb', $$ MATCH (p:Part) RETURN p $$) AS (p agtype);");
             try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(countSql)) {
                 if (rs.next()) totalParts = rs.getLong(1);
             }
@@ -46,7 +55,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             if (this.sfGlobalAtivo < 1) this.sfGlobalAtivo = 1;
             System.out.println("   [Benchmark] Scale Factor detetado no motor: SF" + this.sfGlobalAtivo);
             partKeysPool.clear();
-            String harvestSql = "SELECT ag_catalog.agtype_to_text(id) FROM cypher('" + graphName + "', $$ MATCH (p:Part) RETURN p.id $$) AS (id agtype) LIMIT 1000;";
+            String harvestSql = prepareQuery("SELECT ag_catalog.agtype_to_text(id) FROM cypher('deepchaindb', $$ MATCH (p:Part) RETURN p.id $$) AS (id agtype) LIMIT 1000;");
             try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(harvestSql)) {
                 while (rs.next()) {
                     String id = rs.getString(1);
@@ -94,7 +103,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             String keyBase = (q < 2) ? String.valueOf(coldRandom.nextInt(2000)) : TARGETS_ANALITICOS[coldRandom.nextInt(TARGETS_ANALITICOS.length)];
             long startQuery = System.nanoTime();
             boolean sucesso = true;
-            try (PreparedStatement pstmt = db.prepareStatement(QUERIES_STRESS_TEST_READ[q])) {
+            try (PreparedStatement pstmt = db.prepareStatement(prepareQuery(QUERIES_STRESS_TEST_READ[q]))) {
                 PGobject param = new PGobject();
                 param.setType("agtype");
                 param.setValue("{\"key_base\": \"" + keyBase + "_sf" + this.sfGlobalAtivo + "\"}");
@@ -111,7 +120,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             String targetKey = keyBase + "_sf" + this.sfGlobalAtivo;
             long startQuery = System.nanoTime();
             boolean sucesso = true;
-            try (PreparedStatement pstmt = db.prepareStatement(QUERIES_WRITE[w])) {
+            try (PreparedStatement pstmt = db.prepareStatement(prepareQuery(QUERIES_WRITE[w]))) {
                 if (w == 0) {
                     pstmt.setString(1, "\"Tipo A\"");
                     pstmt.setString(2, "99");
@@ -163,7 +172,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
                         try {
                             if (isRead) {
                                 int qIndex = escolherQueryPorPerfil(probsLeitura, deterministico.nextInt(100));
-                                try (PreparedStatement pstmt = db.prepareStatement(QUERIES_STRESS_TEST_READ[qIndex])) {
+                                try (PreparedStatement pstmt = db.prepareStatement(prepareQuery(QUERIES_STRESS_TEST_READ[qIndex]))) {
                                     if (qIndex == 1) pstmt.setString(1, targetKey);
                                     else {
                                         PGobject param = new PGobject(); param.setType("agtype");
@@ -174,7 +183,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
                                 }
                             } else {
                                 int wIndex = escolherQueryPorPerfil(probsEscrita, deterministico.nextInt(100));
-                                try (PreparedStatement pstmt = db.prepareStatement(QUERIES_WRITE[wIndex])) {
+                                try (PreparedStatement pstmt = db.prepareStatement(prepareQuery(QUERIES_WRITE[wIndex]))) {
                                     if (wIndex == 0) {
                                         pstmt.setString(1, "\"Tipo A\"");
                                         pstmt.setString(2, "99");
@@ -240,7 +249,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
         int index;
         try { index = Integer.parseInt(queryId) - 1; } catch (NumberFormatException e) { System.out.println("[ERRO] ID de Query inválido."); return; }
         if (index < 0 || index >= QUERIES_RFI.length) { System.out.println("[ERRO] A Query selecionada não existe no array (1 a 10)."); return; }
-        String aqlQuery = QUERIES_RFI[index];
+        String aqlQuery = prepareQuery(QUERIES_RFI[index]);
         final String[] TARGET_KEYS = { "15", "12", "800", "800", "500", "500", "500", "500", "799", "800" };
         String targetKey = TARGET_KEYS[index] + "_sf" + this.sfGlobalAtivo;
         final int[] DEPTHS = {1, 1, 1, 1, 299, 299, 299, 299, 299, 10};
@@ -337,9 +346,9 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
     public void limparDadosTemporarios(Connection db) {
         System.out.println("\n-> A INICIAR LIMPEZA DE DADOS TEMPORÁRIOS (HTAP) no Postgres...");
         String[] cleanupQueries = {
-            "SELECT * FROM cypher('" + graphName + "', $$ MATCH ()-[e:BoM]->() WHERE e.is_temp = true DELETE e $$, 'null'::agtype) AS (a agtype)",
+            prepareQuery("SELECT * FROM cypher('deepchaindb', $$ MATCH ()-[e:BoM]->() WHERE e.is_temp = true DELETE e $$, 'null'::agtype) AS (a agtype)"),
             "UPDATE " + qualityTable + " SET value = value - 'is_temp' - 'diamond_hits' WHERE value->>'is_temp' = 'true'",
-            "SELECT * FROM cypher('" + graphName + "', $$ MATCH (p:Part) WHERE p.is_temp = true REMOVE p.last_inspected, p.is_temp $$, 'null'::agtype) AS (a agtype)",
+            prepareQuery("SELECT * FROM cypher('deepchaindb', $$ MATCH (p:Part) WHERE p.is_temp = true REMOVE p.last_inspected, p.is_temp $$, 'null'::agtype) AS (a agtype)"),
             "UPDATE " + telemetryTable + " SET data = jsonb_set(data - 'is_temp', '{anomaly}', 'false'::jsonb) WHERE data->>'is_temp' = 'true'"
         };
         for (int i = 0; i < cleanupQueries.length; i++) {
