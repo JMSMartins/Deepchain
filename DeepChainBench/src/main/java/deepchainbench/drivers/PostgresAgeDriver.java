@@ -281,6 +281,10 @@ public class PostgresAgeDriver implements DatabaseDriver {
         return totalBytes;
     }
 
+    public Connection getConnection() {
+        return this.conn;
+    }
+
     @Override
     public void dropDatabase() throws Exception {
         if (conn != null && currentGraphName != null) {
