@@ -2,7 +2,7 @@ package deepchainbench;
 
 import java.io.File;
 import java.util.Scanner;
-import deepchainbench.core.BenchmarkEngine;
+import deepchainbench.core.Arango.BenchmarkEngineArango;
 import deepchainbench.core.DatabaseDriver;
 import deepchainbench.drivers.ArangoDriver;
 import deepchainbench.generator.Generator_data;
@@ -25,7 +25,7 @@ public class Main {
             System.out.println("1. Criar novo Dataset (Scale Factor)");
             System.out.println("2. Ingestão de Dados (Configurar Esquema e Carregar)");
             System.out.println("3. Executar Testes RFI (Benchmark de Queries)");
-            System.out.println("4. Executar Testes Concorrencia (Benchmark de Queries) (Não Implementado)");
+            System.out.println("4. Executar Testes Concorrencia (Benchmark de Queries) ");
             System.out.println("0. Sair");
             System.out.print("Escolha uma opção: ");
 
@@ -80,12 +80,13 @@ public class Main {
         System.out.println("Selecione a Base de Dados de Destino:");
         System.out.println("1. ArangoDB");
         System.out.println("2. OrientDB (Não implementado)");
-        System.out.println("3. PostgreSQL (Não implementado)");
+        System.out.println("3. PostgreSQL ");
         System.err.println("4. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
         DatabaseDriver driver = null;
+        String dbNameStr = "";
 
         try {
             if (targetDb.equals("1")) {
@@ -93,12 +94,17 @@ public class Main {
                 // Usa o teu IP real configurado
                 //driver.connect("192.168.0.103", 8529, "root", "password");
                 driver.connect("127.0.0.1", 8529, "root", "password");
+                dbNameStr = "ArangoDB";
             } else if (targetDb.equals("2")) {
                 System.out.println("O módulo OrientDB ainda não foi implementado.");
                 return;
             } else if (targetDb.equals("3")) {
-                System.out.println("O módulo PostgreSQL ainda não foi implementado.");
-                return;
+                // Instancia o teu PostgresAgeDriver (implementa DatabaseDriver)
+                driver = new deepchainbench.drivers.PostgresAgeDriver();
+                
+                driver.connect("127.0.0.1", 5432, "postgres", "password");
+                dbNameStr = "PostgreSQL_AGE";
+                
             } else if (targetDb.equals("4")) {
                 return;
             } else {
@@ -165,7 +171,7 @@ public class Main {
             System.out.printf("   Tempo total: %.2f segundos\n", (durationMs / 1000.0));
 
             // 4. GUARDAR NO EXCEL
-            String dbNameStr = targetDb.equals("1") ? "ArangoDB" : "Outra";
+           
 
             // Passar os timestamps de início e fim para a classe MetricsExporter
             MetricsExporter.saveToExcel(
@@ -254,7 +260,7 @@ public class Main {
             System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa.");
 
             // 5. DELEGAR EXECUÇÃO PARA O MOTOR
-            BenchmarkEngine engine = new BenchmarkEngine();
+            BenchmarkEngineArango engine = new BenchmarkEngineArango();
 
             //TODO -> ATENÇÃO QUE DEPOIS TENHO DE POR AS QUERIES DINÂMICAS PARA OS VARIADOS SF
             // Faz o harvesting dos IDs (ex: "500_sf1") para a memória da aplicação
@@ -317,7 +323,7 @@ public class Main {
             System.out.println("-> Selecionada: " + dbAlvo);
 
             com.arangodb.ArangoDatabase dbConnection = TestArango.db(dbAlvo);
-            BenchmarkEngine engine = new BenchmarkEngine();
+            BenchmarkEngineArango engine = new BenchmarkEngineArango();
 
             // Fase 1: Harvesting de parâmetros em memória
             engine.warmUpAndHarvest(dbConnection);

@@ -1,4 +1,4 @@
-package deepchainbench.core;
+package deepchainbench.core.Arango;
 
 import com.arangodb.ArangoCursor;
 import com.arangodb.ArangoDatabase;
@@ -6,8 +6,12 @@ import deepchainbench.generator.GraphGenerator;
 import java.util.*;
 import java.util.concurrent.*;
 import com.arangodb.model.AqlQueryOptions;
+import deepchainbench.core.AbstractBenchmarkEngine;
+import deepchainbench.core.MetricsExporter;
+import deepchainbench.core.TelemetryEngine;
 
-public class BenchmarkEngine {
+
+public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabase>{
 
     private List<String> partKeysPool = new ArrayList<>();
     private final List<Long> latencies = Collections.synchronizedList(new ArrayList<>());
@@ -174,6 +178,7 @@ public class BenchmarkEngine {
      * Fase de Aquecimento (Warm-up / Parameter Harvesting) Extrai IDs reais
      * criados na ingestão para garantir caminhos de travessia válidos.
      */
+    @Override
     public void warmUpAndHarvest(ArangoDatabase db) {
         System.out.println("   [Benchmark] A iniciar Warm-up e colheita de parâmetros...");
         try {
@@ -204,6 +209,7 @@ public class BenchmarkEngine {
      * Executa o teste concorrente HTAP. Grava RAM/CPU em background e exporta a
      * Timeline de Latências individual.
      */
+    @Override
     public void runWorkload(ArangoDatabase db, String perfilNome, int[] probsLeitura, int[] probsEscrita, int readPercentage, int numClientes) {
         if (partKeysPool.isEmpty()) {
             System.out.println("[ERRO] Pool de parâmetros vazia. Execute o warm-up primeiro.");
@@ -245,6 +251,77 @@ public class BenchmarkEngine {
             Thread.sleep(2000);
         } catch (InterruptedException e) {
         }
+        
+        // =========================================================================
+        // ROUND 0 (COLD START): Forçar compilação dos planos de execução no SGBD
+        // =========================================================================
+        System.out.println("-> A EXECUTAR ROUND 0 (COLD START) - Aquecer Caches do Motor...");
+        long tInicioRound0 = System.currentTimeMillis();
+        Random coldRandom = new Random(99999); // Semente isolada apenas para o Round 0
+        AqlQueryOptions coldOptions = new AqlQueryOptions().maxRuntime(60.0);
+
+        // 0.1 - Correr 1 vez cada Query de Leitura
+        for (int q = 0; q < QUERIES_STRESS_TEST_READ.length; q++) {
+            Map<String, Object> bindVars = new HashMap<>();
+            bindVars.put("sf", this.sfGlobalAtivo);
+            if (q < 2) {
+                bindVars.put("key_base", String.valueOf(coldRandom.nextInt(2000)));
+            } else {
+                bindVars.put("key_base", TARGETS_ANALITICOS[coldRandom.nextInt(TARGETS_ANALITICOS.length)]);
+            }
+
+            long startQuery = System.nanoTime();
+            boolean sucesso = true;
+            try {
+                ArangoCursor<Map> cursor = db.query(QUERIES_STRESS_TEST_READ[q], Map.class, bindVars, coldOptions);
+                while (cursor.hasNext()) { cursor.next(); }
+                cursor.close();
+            } catch (Exception e) {
+                sucesso = false;
+            }
+            long latencyMs = (System.nanoTime() - startQuery) / 1_000_000;
+            long timeNow = System.currentTimeMillis();
+            
+            // O segredo está aqui: A tag "COLD_READ" em vez de "READ"
+            latencyLogs.add(timeNow + ",COLD_READ," + latencyMs + "," + sucesso);
+            executionLogs.add("[" + new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_READ (Q" + (q + 1) + ") em " + latencyMs + " ms.");
+        }
+
+        // 0.2 - Correr 1 vez cada Query de Escrita
+        for (int w = 0; w < QUERIES_WRITE.length; w++) {
+            Map<String, Object> bindVars = new HashMap<>();
+            bindVars.put("sf", this.sfGlobalAtivo);
+            
+            if (w < 4) { bindVars.put("key_base", String.valueOf(coldRandom.nextInt(2000))); }
+            else if (w == 8) { bindVars.put("key_base", (coldRandom.nextBoolean() ? "799" : "1599")); }
+            else { bindVars.put("key_base", TARGETS_ANALITICOS[coldRandom.nextInt(TARGETS_ANALITICOS.length)]); }
+
+            // Preencher variáveis obrigatórias para não dar erro de sintaxe
+            bindVars.put("nova_cert", "Tipo A");
+            bindVars.put("novo_score", 99);
+            bindVars.put("ts", System.currentTimeMillis());
+            bindVars.put("temp", 85.5);
+            bindVars.put("novo_material", "Titânio");
+            bindVars.put("target_child", String.valueOf(coldRandom.nextInt(2000)));
+
+            long startQuery = System.nanoTime();
+            boolean sucesso = true;
+            try {
+                db.query(QUERIES_WRITE[w], Map.class, bindVars, coldOptions);
+            } catch (Exception e) {
+                sucesso = false;
+            }
+            long latencyMs = (System.nanoTime() - startQuery) / 1_000_000;
+            long timeNow = System.currentTimeMillis();
+            
+            // O segredo está aqui: A tag "COLD_WRITE" em vez de "WRITE"
+            latencyLogs.add(timeNow + ",COLD_WRITE," + latencyMs + "," + sucesso);
+            executionLogs.add("[" + new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_WRITE (W" + (w + 1) + ") em " + latencyMs + " ms.");
+        }
+        System.out.println("-> ROUND 0 CONCLUÍDO em " + (System.currentTimeMillis() - tInicioRound0) + "ms. Planos de execução em cache.");
+        // =========================================================================
+        // FIM DO ROUND 0
+        // =========================================================================
 
         ExecutorService executor = Executors.newFixedThreadPool(numClientes);
         CountDownLatch latch = new CountDownLatch(numClientes);
@@ -449,6 +526,7 @@ public class BenchmarkEngine {
     /**
      * Limpa o lixo inserido no HTAP.
      */
+    @Override
     public void limparDadosTemporarios(ArangoDatabase db) {
         System.out.println("\n-> A INICIAR LIMPEZA DE DADOS TEMPORÁRIOS (HTAP)...");
 
@@ -468,48 +546,8 @@ public class BenchmarkEngine {
         }
         System.out.println("-> Limpeza concluída! Base de dados restaurada para o estado de avaliação.");
     }
+    
 
-    private int escolherQueryPorPerfil(int[] probs, int randomValue) {
-        int soma = 0;
-        for (int i = 0; i < probs.length; i++) {
-            soma += probs[i];
-            if (randomValue < soma) {
-                return i;
-            }
-        }
-        return 0;
-    }
-
-  private void processarEstatisticas(String sessionTimestamp, String perfil, int clientes, int totalPedidos, long tempoTotalMs) {
-        if (latencies.isEmpty()) {
-            System.out.println("Nenhum pedido foi processado com sucesso.");
-            return;
-        }
-
-        List<Long> ordenadas = new ArrayList<>(latencies);
-        Collections.sort(ordenadas);
-
-        int size = ordenadas.size();
-        long p50 = ordenadas.get((int) (size * 0.50));
-        long p95 = ordenadas.get((int) (size * 0.95));
-        long p99 = ordenadas.get((int) (size * 0.99));
-
-        double throughput = (size / (tempoTotalMs / 1000.0));
-        double tempoTotalSegundos = tempoTotalMs / 1000.0;
-        int falhas = falhasContencao.size();
-
-        System.out.println("\n================ METRICAS FINAIS (" + perfil + ") ================");
-        System.out.printf("Throughput Global : %.2f ops/sec\n", throughput);
-        System.out.println("Latência Média P50: " + p50 + " ms");
-        System.out.println("Latência Cauda P95: " + p95 + " ms");
-        System.out.println("Latência Crítica P99: " + p99 + " ms  <-- Tail Latency");
-        System.out.println("Tempo Total de Carga: " + tempoTotalSegundos + " segundos");
-        System.out.println("Falhas de Concorrência (Timeouts): " + falhas + " de " + totalPedidos);
-        System.out.println("===============================================================");
-        
-        // NOVO PASSO: Exportar para CSV usando o MetricsExporter
-        MetricsExporter.saveHTAPSummary(sessionTimestamp, perfil, clientes, totalPedidos, throughput, p50, p95, p99, tempoTotalSegundos, falhas);
-    }
 // =====================================================================================================
     /**
      * ========================== ****** RFI ********* ==========================================================
@@ -543,6 +581,7 @@ public class BenchmarkEngine {
      * Executa o Modo RFI (Resource Footprint Index). Isola 1 Thread e mede o
      * Cold Run vs Warm Runs para testar o Memoization do Otimizador.
      */
+    @Override
     public void runRFI(ArangoDatabase db, String queryId, int warmRuns) {
         if (partKeysPool.isEmpty()) {
             System.out.println("[ERRO] Pool de parâmetros vazia. O motor precisa do Warm-up primeiro.");
