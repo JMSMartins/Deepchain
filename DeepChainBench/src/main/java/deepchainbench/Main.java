@@ -2,9 +2,14 @@ package deepchainbench;
 
 import java.io.File;
 import java.util.Scanner;
+import java.sql.Connection;
+import java.sql.Statement;
+import java.sql.ResultSet;
 import deepchainbench.core.Arango.BenchmarkEngineArango;
+import deepchainbench.core.Postgres.BenchmarkEnginePostgres;
 import deepchainbench.core.DatabaseDriver;
 import deepchainbench.drivers.ArangoDriver;
+import deepchainbench.drivers.PostgresAgeDriver;
 import deepchainbench.generator.Generator_data;
 import deepchainbench.core.MetricsExporter;
 
@@ -195,23 +200,57 @@ public class Main {
     private static void menuExecutarBenchmarkRFI(Scanner scanner) {
         System.out.println("\n--- MODO RFI: DIAGNÓSTICO ESTRUTURAL (1 THREAD) ---");
 
-        // Ligação dedicada para o Modo RFI (apenas 1 ligação necessária)
-        com.arangodb.ArangoDB ArangoRFI = new com.arangodb.ArangoDB.Builder()
-                .host("127.0.0.1", 8529).user("root").password("password").build();
+        System.out.println("Selecione a Base de Dados de Destino:");
+        System.out.println("1. ArangoDB");
+        System.out.println("2. PostgreSQL + AGE");
+        System.err.println("3. Voltar atrás ");
+        System.out.print("Escolha uma opção: ");
+        String targetDb = scanner.nextLine().trim();
+
+        if (targetDb.equals("3")) {
+            return;
+        }
+
+        com.arangodb.ArangoDB ArangoRFI = null;
+        PostgresAgeDriver pgDriver = null;
 
         try {
-            // 1. LISTAR BASES DE DADOS DISPONÍVEIS
-            System.out.println("A procurar esquemas (bases de dados) no servidor...");
-            java.util.Collection<String> databases = ArangoRFI.getDatabases();
             java.util.List<String> userDbs = new java.util.ArrayList<>();
 
-            int counter = 1;
-            for (String dbName : databases) {
-                if (!dbName.equals("_system")) {
-                    System.out.println("  " + counter + ". " + dbName);
-                    userDbs.add(dbName);
-                    counter++;
+            if (targetDb.equals("1")) {
+                ArangoRFI = new com.arangodb.ArangoDB.Builder()
+                        .host("127.0.0.1", 8529).user("root").password("password").build();
+
+                System.out.println("A procurar esquemas (bases de dados) no servidor...");
+                java.util.Collection<String> databases = ArangoRFI.getDatabases();
+
+                int counter = 1;
+                for (String dbName : databases) {
+                    if (!dbName.equals("_system")) {
+                        System.out.println("  " + counter + ". " + dbName);
+                        userDbs.add(dbName);
+                        counter++;
+                    }
                 }
+            } else if (targetDb.equals("2")) {
+                pgDriver = new PostgresAgeDriver();
+                pgDriver.connect("127.0.0.1", 5432, "postgres", "password");
+                Connection conn = pgDriver.getConnection();
+
+                System.out.println("A procurar esquemas (bases de dados) no servidor...");
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery("SELECT name FROM ag_catalog.ag_graph")) {
+                    int counter = 1;
+                    while (rs.next()) {
+                        String dbName = rs.getString(1);
+                        System.out.println("  " + counter + ". " + dbName);
+                        userDbs.add(dbName);
+                        counter++;
+                    }
+                }
+            } else {
+                System.out.println("Opção inválida. Operação cancelada.");
+                return;
             }
 
             if (userDbs.isEmpty()) {
@@ -236,7 +275,6 @@ public class Main {
 
             String dbAlvo = userDbs.get(dbChoice);
             System.out.println("-> Esquema Selecionado: " + dbAlvo);
-            com.arangodb.ArangoDatabase dbConnection = ArangoRFI.db(dbAlvo);
 
             // 3. SELECIONAR A QUERY DE STRESS RFI
             System.out.println("\nSelecione a Consulta (Query) para o Teste RFI:");
@@ -260,20 +298,32 @@ public class Main {
             System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa.");
 
             // 5. DELEGAR EXECUÇÃO PARA O MOTOR
-            BenchmarkEngineArango engine = new BenchmarkEngineArango();
-
-            //TODO -> ATENÇÃO QUE DEPOIS TENHO DE POR AS QUERIES DINÂMICAS PARA OS VARIADOS SF
-            // Faz o harvesting dos IDs (ex: "500_sf1") para a memória da aplicação
-            engine.warmUpAndHarvest(dbConnection);
-
-            // Orquestra o RFI com os dados carregados
-            engine.runRFI(dbConnection, queryChoice, warmRuns);
+            if (targetDb.equals("1")) {
+                com.arangodb.ArangoDatabase dbConnection = ArangoRFI.db(dbAlvo);
+                BenchmarkEngineArango engine = new BenchmarkEngineArango();
+                engine.warmUpAndHarvest(dbConnection);
+                engine.runRFI(dbConnection, queryChoice, warmRuns);
+            } else if (targetDb.equals("2")) {
+                Connection conn = pgDriver.getConnection();
+                BenchmarkEnginePostgres engine = new BenchmarkEnginePostgres(dbAlvo);
+                engine.warmUpAndHarvest(conn);
+                engine.runRFI(conn, queryChoice, warmRuns);
+            }
 
         } catch (Exception e) {
             System.out.println("[ERRO] Falha ao executar o Modo RFI: " + e.getMessage());
             e.printStackTrace();
         } finally {
-            ArangoRFI.shutdown();
+            if (ArangoRFI != null) {
+                ArangoRFI.shutdown();
+            }
+            if (pgDriver != null) {
+                try {
+                    pgDriver.close();
+                } catch (Exception e) {
+                    System.out.println("[ERRO] Falha ao fechar conexão com PostgreSQL: " + e.getMessage());
+                }
+            }
         }
     }
 
@@ -281,23 +331,57 @@ public class Main {
     private static void menuExecutarBenchmarkConcorrente(Scanner scanner) {
         System.out.println("\n--- AMBIENTE DE BENCHMARK CONCORRENTE HTAP ---");
 
-        // Configuração de ligação rápida para validação do estado ativo
-        com.arangodb.ArangoDB TestArango = new com.arangodb.ArangoDB.Builder()
-                .host("127.0.0.1", 8529).user("root").password("password").maxConnections(150).build();
+        System.out.println("Selecione a Base de Dados de Destino:");
+        System.out.println("1. ArangoDB");
+        System.out.println("2. PostgreSQL + AGE");
+        System.err.println("3. Voltar atrás ");
+        System.out.print("Escolha uma opção: ");
+        String targetDb = scanner.nextLine().trim();
+
+        if (targetDb.equals("3")) {
+            return;
+        }
+
+        com.arangodb.ArangoDB TestArango = null;
+        PostgresAgeDriver pgDriver = null;
 
         try {
-            // 1. LISTAR BASES DE DADOS DISPONÍVEIS
-            System.out.println("A procurar bases de dados no servidor...");
-            java.util.Collection<String> databases = TestArango.getDatabases();
             java.util.List<String> userDbs = new java.util.ArrayList<>();
 
-            int counter = 1;
-            for (String dbName : databases) {
-                if (!dbName.equals("_system")) {
-                    System.out.println("  " + counter + ". " + dbName);
-                    userDbs.add(dbName);
-                    counter++;
+            if (targetDb.equals("1")) {
+                TestArango = new com.arangodb.ArangoDB.Builder()
+                        .host("127.0.0.1", 8529).user("root").password("password").maxConnections(150).build();
+
+                System.out.println("A procurar bases de dados no servidor...");
+                java.util.Collection<String> databases = TestArango.getDatabases();
+
+                int counter = 1;
+                for (String dbName : databases) {
+                    if (!dbName.equals("_system")) {
+                        System.out.println("  " + counter + ". " + dbName);
+                        userDbs.add(dbName);
+                        counter++;
+                    }
                 }
+            } else if (targetDb.equals("2")) {
+                pgDriver = new PostgresAgeDriver();
+                pgDriver.connect("127.0.0.1", 5432, "postgres", "password");
+                Connection conn = pgDriver.getConnection();
+
+                System.out.println("A procurar bases de dados no servidor...");
+                try (Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery("SELECT name FROM ag_catalog.ag_graph")) {
+                    int counter = 1;
+                    while (rs.next()) {
+                        String dbName = rs.getString(1);
+                        System.out.println("  " + counter + ". " + dbName);
+                        userDbs.add(dbName);
+                        counter++;
+                    }
+                }
+            } else {
+                System.out.println("Opção inválida. Operação cancelada.");
+                return;
             }
 
             if (userDbs.isEmpty()) {
@@ -322,11 +406,21 @@ public class Main {
             String dbAlvo = userDbs.get(dbChoice);
             System.out.println("-> Selecionada: " + dbAlvo);
 
-            com.arangodb.ArangoDatabase dbConnection = TestArango.db(dbAlvo);
-            BenchmarkEngineArango engine = new BenchmarkEngineArango();
+            com.arangodb.ArangoDatabase arangoDbConnection = null;
+            Connection postgresConn = null;
+            BenchmarkEngineArango arangoEngine = null;
+            BenchmarkEnginePostgres postgresEngine = null;
 
-            // Fase 1: Harvesting de parâmetros em memória
-            engine.warmUpAndHarvest(dbConnection);
+            if (targetDb.equals("1")) {
+                arangoDbConnection = TestArango.db(dbAlvo);
+                arangoEngine = new BenchmarkEngineArango();
+                // Fase 1: Harvesting de parâmetros em memória
+                arangoEngine.warmUpAndHarvest(arangoDbConnection);
+            } else if (targetDb.equals("2")) {
+                postgresConn = pgDriver.getConnection();
+                postgresEngine = new BenchmarkEnginePostgres(dbAlvo);
+                postgresEngine.warmUpAndHarvest(postgresConn);
+            }
 
             System.out.println("\nSelecione o perfil de distribuição de carga (HTAP):");
             System.out.println("1. Read-Heavy (95% Leituras Simples | 5% Escritas Atómicas) - Baseline");
@@ -382,16 +476,28 @@ public class Main {
             }
 
             // Disparar a Worker Pool com todos os parâmetros!
-            engine.runWorkload(dbConnection, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
-            
-            // ---> É AQUI QUE USAS A LIMPEZA <---
-            // Limpa automaticamente o lixo HTAP no final do teste
-            engine.limparDadosTemporarios(dbConnection);
+            if (targetDb.equals("1")) {
+                arangoEngine.runWorkload(arangoDbConnection, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
+                // Limpa automaticamente o lixo HTAP no final do teste
+                arangoEngine.limparDadosTemporarios(arangoDbConnection);
+            } else if (targetDb.equals("2")) {
+                postgresEngine.runWorkload(postgresConn, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
+                postgresEngine.limparDadosTemporarios(postgresConn);
+            }
 
         } catch (Exception e) {
-            System.out.println("[ERRO] Falha ao ligar ao ArangoDB ou ao executar o benchmark: " + e.getMessage());
+            System.out.println("[ERRO] Falha ao executar o benchmark: " + e.getMessage());
         } finally {
-            TestArango.shutdown();
+            if (TestArango != null) {
+                TestArango.shutdown();
+            }
+            if (pgDriver != null) {
+                try {
+                    pgDriver.close();
+                } catch (Exception e) {
+                    System.out.println("[ERRO] Falha ao fechar conexão com PostgreSQL: " + e.getMessage());
+                }
+            }
         }
     }
 }
