@@ -49,7 +49,8 @@ public class PostgresAgeDriver implements DatabaseDriver {
         try (Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE EXTENSION IF NOT EXISTS age CASCADE;");
             stmt.execute("LOAD 'age';");
-            stmt.execute("SET search_path = ag_catalog, \"$user\", public;");
+            // ← ALTERADO: public primeiro, para que CREATE TABLE sem qualificação vá para public
+            stmt.execute("SET search_path = public, ag_catalog, \"$user\";");
         }
     }
 
@@ -79,12 +80,14 @@ public class PostgresAgeDriver implements DatabaseDriver {
             // ----------------------------------------------
             
             // 3. Limpar e Criar Tabela para Key-Value Simulado (Nativo Postgres)
-            stmt.execute("DROP TABLE IF EXISTS " + currentGraphName + "_" + QUALITY_TABLE + ";");
-            stmt.execute("CREATE TABLE " + currentGraphName + "_" + QUALITY_TABLE + " (key VARCHAR PRIMARY KEY, value JSONB);");
+            // ← ALTERADO: qualificado com public. para não cair em ag_catalog
+            stmt.execute("DROP TABLE IF EXISTS public." + currentGraphName + "_" + QUALITY_TABLE + ";");
+            stmt.execute("CREATE TABLE public." + currentGraphName + "_" + QUALITY_TABLE + " (key VARCHAR PRIMARY KEY, value JSONB);");
             
             // 4. Limpar e Criar Tabela para Documentos Simulado (Nativo Postgres)
-            stmt.execute("DROP TABLE IF EXISTS " + currentGraphName + "_" + TELEMETRY_TABLE + ";");
-            stmt.execute("CREATE TABLE " + currentGraphName + "_" + TELEMETRY_TABLE + " (id SERIAL PRIMARY KEY, data JSONB);");
+            // ← ALTERADO: qualificado com public. para não cair em ag_catalog
+            stmt.execute("DROP TABLE IF EXISTS public." + currentGraphName + "_" + TELEMETRY_TABLE + ";");
+            stmt.execute("CREATE TABLE public." + currentGraphName + "_" + TELEMETRY_TABLE + " (id SERIAL PRIMARY KEY, data JSONB);");
             
             System.out.println("   [Postgres+AGE] Esquemas de Grafo e Tabelas JSONB configurados com sucesso.");
         }
@@ -177,7 +180,8 @@ public class PostgresAgeDriver implements DatabaseDriver {
         ObjectMapper mapper = new ObjectMapper();
         
         // Escrita nativa em tabela PostgreSQL com casting para JSONB
-        String sql = "INSERT INTO " + currentGraphName + "_" + QUALITY_TABLE + " (key, value) VALUES (?, ?::jsonb)";
+        // ← ALTERADO: qualificado com public.
+        String sql = "INSERT INTO public." + currentGraphName + "_" + QUALITY_TABLE + " (key, value) VALUES (?, ?::jsonb)";
         
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              BufferedReader br = new BufferedReader(new FileReader(csvPath))) {
@@ -215,7 +219,8 @@ public class PostgresAgeDriver implements DatabaseDriver {
     public void ingestTelemetry(String jsonPath) throws Exception {
         System.out.println("   [Postgres+AGE] A carregar documentos (Telemetry) para Postgres JSONB...");
         
-        String sql = "INSERT INTO " + currentGraphName + "_" + TELEMETRY_TABLE + " (data) VALUES (?::jsonb)";
+        // ← ALTERADO: qualificado com public.
+        String sql = "INSERT INTO public." + currentGraphName + "_" + TELEMETRY_TABLE + " (data) VALUES (?::jsonb)";
         
         try (PreparedStatement pstmt = conn.prepareStatement(sql);
              BufferedReader br = new BufferedReader(new FileReader(jsonPath))) {
@@ -259,11 +264,13 @@ public class PostgresAgeDriver implements DatabaseDriver {
         try (Statement stmt = conn.createStatement()) {
             // No PostgreSQL podemos usar diretamente as funções internas para ver o tamanho real em disco das tabelas e índices
             // 1. Tamanho da tabela e índices KV
-            ResultSet rsKV = stmt.executeQuery("SELECT pg_total_relation_size('" + currentGraphName + "_" + QUALITY_TABLE + "');");
+            // ← ALTERADO: qualificado com public.
+            ResultSet rsKV = stmt.executeQuery("SELECT pg_total_relation_size('public." + currentGraphName + "_" + QUALITY_TABLE + "');");
             if (rsKV.next()) totalBytes += rsKV.getLong(1);
             
             // 2. Tamanho da tabela e índices Telemetria
-            ResultSet rsTel = stmt.executeQuery("SELECT pg_total_relation_size('" + currentGraphName + "_" + TELEMETRY_TABLE + "');");
+            // ← ALTERADO: qualificado com public.
+            ResultSet rsTel = stmt.executeQuery("SELECT pg_total_relation_size('public." + currentGraphName + "_" + TELEMETRY_TABLE + "');");
             if (rsTel.next()) totalBytes += rsTel.getLong(1);
             
             // 3. Tamanho das tabelas criadas pelo AGE dentro do Schema do Grafo
@@ -290,8 +297,9 @@ public class PostgresAgeDriver implements DatabaseDriver {
         if (conn != null && currentGraphName != null) {
             try (Statement stmt = conn.createStatement()) {
                 stmt.execute("SELECT drop_graph('" + currentGraphName + "', true);");
-                stmt.execute("DROP TABLE IF EXISTS " + currentGraphName + "_" + QUALITY_TABLE + ";");
-                stmt.execute("DROP TABLE IF EXISTS " + currentGraphName + "_" + TELEMETRY_TABLE + ";");
+                // ← ALTERADO: qualificado com public.
+                stmt.execute("DROP TABLE IF EXISTS public." + currentGraphName + "_" + QUALITY_TABLE + ";");
+                stmt.execute("DROP TABLE IF EXISTS public." + currentGraphName + "_" + TELEMETRY_TABLE + ";");
                 System.out.println("   [Postgres+AGE] Limpeza efetuada (Grafo e Tabelas removidos).");
             }
         }

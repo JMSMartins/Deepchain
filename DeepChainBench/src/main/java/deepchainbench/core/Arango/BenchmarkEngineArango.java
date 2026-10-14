@@ -258,7 +258,7 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         System.out.println("-> A EXECUTAR ROUND 0 (COLD START) - Aquecer Caches do Motor...");
         long tInicioRound0 = System.currentTimeMillis();
         Random coldRandom = new Random(99999); // Semente isolada apenas para o Round 0
-        AqlQueryOptions coldOptions = new AqlQueryOptions().maxRuntime(60.0);
+        AqlQueryOptions coldOptions = new AqlQueryOptions().maxRuntime(120.0);
 
         // 0.1 - Correr 1 vez cada Query de Leitura
         for (int q = 0; q < QUERIES_STRESS_TEST_READ.length; q++) {

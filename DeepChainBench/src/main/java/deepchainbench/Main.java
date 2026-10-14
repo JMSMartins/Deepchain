@@ -20,12 +20,13 @@ import java.time.format.DateTimeFormatter;
 
 public class Main {
 
-    public static void main(String[] args) {
+public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
-
-        while (scanner.hasNextLine()) {
+        String opcao = "";
+        // Usar while(true) garante que o menu é impresso imediatamente
+        while (true) {
             System.out.println("\n=========================================");
-            System.out.println("       DEEPCHAIN BENCHMARK SYSTEM        ");
+            System.out.println("         DEEPCHAIN BENCHMARK SYSTEM         ");
             System.out.println("=========================================");
             System.out.println("1. Criar novo Dataset (Scale Factor)");
             System.out.println("2. Ingestão de Dados (Configurar Esquema e Carregar)");
@@ -34,7 +35,10 @@ public class Main {
             System.out.println("0. Sair");
             System.out.print("Escolha uma opção: ");
 
-            String opcao = scanner.nextLine().trim();
+            // Agora o menu é impresso primeiro e só depois o scanner fica à espera da escolha
+            if (scanner.hasNextLine()) {
+                opcao = scanner.nextLine().trim();
+            }
 
             switch (opcao) {
                 case "1":
@@ -51,7 +55,8 @@ public class Main {
                     break;
                 case "0":
                     System.out.println("A sair do sistema. Até à próxima!");
-                    return;
+                    scanner.close();
+                    return; // Termina o programa e sai do main
                 default:
                     System.out.println("Opção inválida! Tente novamente.");
             }

@@ -13,7 +13,7 @@ O projeto está modularizado para suportar múltiplos SGBDs através de injeçã
 - `deepchainbench.core.Arango`: Motores e sondas específicas para ArangoDB (Prometheus API).
 - `deepchainbench.drivers`: Adaptadores JDBC/Nativos. Ponto de expansão para novos motores (ex: `ArangoDriver`, `PostgresAgeDriver`).
 - `deepchainbench.generator`: Onde a magia matemática acontece. Gera CSVs/JSON estocásticos e escalonáveis (`Generator_data`, `GraphGenerator`).
-- `deepchainbench.ingestor`: Classes que leem o I/O local e mapeiam o modelo multimodelo físico (ex: `ArangoIngestor`, `PostgresAgeIngestor`).
+
 
 ## 2. Requisitos de Ambiente (Serviços)
 
