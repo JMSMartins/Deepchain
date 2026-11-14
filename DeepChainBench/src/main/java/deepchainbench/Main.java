@@ -207,17 +207,20 @@ public static void main(String[] args) {
 
         System.out.println("Selecione a Base de Dados de Destino:");
         System.out.println("1. ArangoDB");
-        System.out.println("2. PostgreSQL + AGE");
+        System.out.println("2. PostgreSQL + AGE (Desativado - não expõe pico de RAM por query)");
         System.err.println("3. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
+        if (targetDb.equals("2")) {
+            System.out.println("O modo RFI está desativado para PostgreSQL + AGE porque o motor não expõe o pico de memória por query.");
+            return;
+        }
         if (targetDb.equals("3")) {
             return;
         }
 
         com.arangodb.ArangoDB ArangoRFI = null;
-        PostgresAgeDriver pgDriver = null;
 
         try {
             java.util.List<String> userDbs = new java.util.ArrayList<>();
@@ -232,22 +235,6 @@ public static void main(String[] args) {
                 int counter = 1;
                 for (String dbName : databases) {
                     if (!dbName.equals("_system")) {
-                        System.out.println("  " + counter + ". " + dbName);
-                        userDbs.add(dbName);
-                        counter++;
-                    }
-                }
-            } else if (targetDb.equals("2")) {
-                pgDriver = new PostgresAgeDriver();
-                pgDriver.connect("127.0.0.1", 5432, "postgres", "password");
-                Connection conn = pgDriver.getConnection();
-
-                System.out.println("A procurar esquemas (bases de dados) no servidor...");
-                try (Statement stmt = conn.createStatement();
-                     ResultSet rs = stmt.executeQuery("SELECT name FROM ag_catalog.ag_graph")) {
-                    int counter = 1;
-                    while (rs.next()) {
-                        String dbName = rs.getString(1);
                         System.out.println("  " + counter + ". " + dbName);
                         userDbs.add(dbName);
                         counter++;
@@ -308,11 +295,6 @@ public static void main(String[] args) {
                 BenchmarkEngineArango engine = new BenchmarkEngineArango();
                 engine.warmUpAndHarvest(dbConnection);
                 engine.runRFI(dbConnection, queryChoice, warmRuns);
-            } else if (targetDb.equals("2")) {
-                Connection conn = pgDriver.getConnection();
-                BenchmarkEnginePostgres engine = new BenchmarkEnginePostgres(dbAlvo);
-                engine.warmUpAndHarvest(conn);
-                engine.runRFI(conn, queryChoice, warmRuns);
             }
 
         } catch (Exception e) {
@@ -321,13 +303,6 @@ public static void main(String[] args) {
         } finally {
             if (ArangoRFI != null) {
                 ArangoRFI.shutdown();
-            }
-            if (pgDriver != null) {
-                try {
-                    pgDriver.close();
-                } catch (Exception e) {
-                    System.out.println("[ERRO] Falha ao fechar conexão com PostgreSQL: " + e.getMessage());
-                }
             }
         }
     }

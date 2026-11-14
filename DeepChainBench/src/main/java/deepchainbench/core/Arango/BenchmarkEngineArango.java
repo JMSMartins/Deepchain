@@ -7,20 +7,12 @@ import java.util.*;
 import java.util.concurrent.*;
 import com.arangodb.model.AqlQueryOptions;
 import deepchainbench.core.AbstractBenchmarkEngine;
+import deepchainbench.core.LinuxProcTelemetry;
 import deepchainbench.core.MetricsExporter;
 import deepchainbench.core.TelemetryEngine;
 
 
 public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabase>{
-
-    private List<String> partKeysPool = new ArrayList<>();
-    private final List<Long> latencies = Collections.synchronizedList(new ArrayList<>());
-    private final List<String> falhasContencao = Collections.synchronizedList(new ArrayList<>());
-    private final List<String> latencyLogs = Collections.synchronizedList(new ArrayList<>()); // <-- NOVA LISTA
-    private final List<String> executionLogs = Collections.synchronizedList(new ArrayList<>());
-
-    // Variável global para guardar o SF detetado
-    private int sfGlobalAtivo = 1;
 
 //    Oposição Direta à Literatura (Quebrar o Small-World): 
 //            O estado da arte dos benchmarks (como o UniBench ou o M2Bench) foca-se na variedade horizontal de dados, 
@@ -171,9 +163,6 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         "FOR i IN 1..@sf LET root = CONCAT('Parts/', @key_base, '_sf', i) FOR v IN 1..10 INBOUND root BoM_Edges OPTIONS { uniqueVertices: 'none', bfs: false } LET kv = DOCUMENT(CONCAT('Quality_KV/', v._key)) UPDATE v._key WITH { diamond_hits: (kv.diamond_hits || 0) + 1, is_temp: true } IN Quality_KV"
     };
 
-    // Alvos analíticos fixos para garantir que as queries pesadas (Q3-Q10) não falham
-    private static final String[] TARGETS_ANALITICOS = {"500", "1300", "800", "799", "1599", "0"};
-
     /**
      * Fase de Aquecimento (Warm-up / Parameter Harvesting) Extrai IDs reais
      * criados na ingestão para garantir caminhos de travessia válidos.
@@ -238,11 +227,9 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         System.out.println("-> Rácio Leitura/Escrita: " + readPercentage + "% / " + (100 - readPercentage) + "%");
         System.out.println("-> Diretório de Métricas: " + folderPath);
 
-        // 2. INICIAR TELEMETRIA DE CPU E RAM (Ficheiro hardware_telemetry.csv)
+        // 2. INICIAR TELEMETRIA DE CPU E RAM (RAM global via /proc/meminfo — alinhado com PostgreSQL)
         String globalCsv = folderPath + "/hardware_telemetry.csv";
-        TelemetryEngine observador = new ArangoTelemetry(
-                globalCsv, "127.0.0.1", 8529, db.name(), "root", "password"
-        );
+        TelemetryEngine observador = new LinuxProcTelemetry(globalCsv);
         Thread threadObservador = new Thread(observador);
         threadObservador.start();
 
@@ -307,7 +294,9 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
             long startQuery = System.nanoTime();
             boolean sucesso = true;
             try {
-                db.query(QUERIES_WRITE[w], Map.class, bindVars, coldOptions);
+                ArangoCursor<Map> cursor = db.query(QUERIES_WRITE[w], Map.class, bindVars, coldOptions);
+                while (cursor.hasNext()) { cursor.next(); }
+                cursor.close();
             } catch (Exception e) {
                 sucesso = false;
             }
