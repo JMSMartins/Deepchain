@@ -5,11 +5,16 @@ import java.util.Scanner;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.sql.ResultSet;
+import deepchainbench.core.Arcade.BenchmarkEngineArcade;
 import deepchainbench.core.Arango.BenchmarkEngineArango;
 import deepchainbench.core.Postgres.BenchmarkEnginePostgres;
 import deepchainbench.core.DatabaseDriver;
+import deepchainbench.core.TelemetryEngine;
+import deepchainbench.drivers.ArcadeDbDriver;
 import deepchainbench.drivers.ArangoDriver;
 import deepchainbench.drivers.PostgresAgeDriver;
+import com.arcadedb.remote.RemoteDatabase;
+import com.arcadedb.remote.RemoteServer;
 import deepchainbench.generator.Generator_data;
 import deepchainbench.core.MetricsExporter;
 
@@ -91,7 +96,8 @@ public static void main(String[] args) {
         System.out.println("1. ArangoDB");
         System.out.println("2. OrientDB (Não implementado)");
         System.out.println("3. PostgreSQL ");
-        System.err.println("4. Voltar atrás ");
+        System.out.println("4. ArcadeDB");
+        System.err.println("5. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
@@ -116,6 +122,10 @@ public static void main(String[] args) {
                 dbNameStr = "PostgreSQL_AGE";
                 
             } else if (targetDb.equals("4")) {
+                driver = new ArcadeDbDriver();
+                driver.connect("127.0.0.1", 2480, "root", "password");
+                dbNameStr = "ArcadeDB";
+            } else if (targetDb.equals("5")) {
                 return;
             } else {
                 System.out.println("Opção inválida.");
@@ -208,7 +218,8 @@ public static void main(String[] args) {
         System.out.println("Selecione a Base de Dados de Destino:");
         System.out.println("1. ArangoDB");
         System.out.println("2. PostgreSQL + AGE (Desativado - não expõe pico de RAM por query)");
-        System.err.println("3. Voltar atrás ");
+        System.out.println("3. ArcadeDB (Desativado - não expõe pico de RAM por query)");
+        System.err.println("4. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
@@ -217,6 +228,10 @@ public static void main(String[] args) {
             return;
         }
         if (targetDb.equals("3")) {
+            System.out.println("O modo RFI está desativado para ArcadeDB porque o motor não expõe o pico de memória por query.");
+            return;
+        }
+        if (targetDb.equals("4")) {
             return;
         }
 
@@ -286,15 +301,19 @@ public static void main(String[] args) {
                 System.out.println("Entrada inválida. A assumir 5 Warm Runs por defeito.");
             }
 
-            System.out.println("\n-> A iniciar Teste RFI para a Query " + queryChoice + "...");
-            System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa.");
+            // 5. CONFIGURAR INTERVALO DE AMOSTRAGEM DA TELEMETRIA (DEFAULT 250ms, MÍNIMO PROVADO 100ms)
+            long intervaloTelemetriaMs = lerIntervaloTelemetria(scanner);
 
-            // 5. DELEGAR EXECUÇÃO PARA O MOTOR
+            System.out.println("\n-> A iniciar Teste RFI para a Query " + queryChoice + "...");
+            System.out.println("-> 1 Cold Run + " + warmRuns + " Warm Runs. Captura de telemetria ativa (" + intervaloTelemetriaMs + " ms).");
+
+            // 6. DELEGAR EXECUÇÃO PARA O MOTOR
             if (targetDb.equals("1")) {
                 com.arangodb.ArangoDatabase dbConnection = ArangoRFI.db(dbAlvo);
                 BenchmarkEngineArango engine = new BenchmarkEngineArango();
+                engine.setTelemetryIntervalMs(intervaloTelemetriaMs);
                 engine.warmUpAndHarvest(dbConnection);
-                engine.runRFI(dbConnection, queryChoice, warmRuns);
+                engine.runRFI(dbConnection, queryChoice, warmRuns, intervaloTelemetriaMs);
             }
 
         } catch (Exception e) {
@@ -314,16 +333,18 @@ public static void main(String[] args) {
         System.out.println("Selecione a Base de Dados de Destino:");
         System.out.println("1. ArangoDB");
         System.out.println("2. PostgreSQL + AGE");
-        System.err.println("3. Voltar atrás ");
+        System.out.println("3. ArcadeDB");
+        System.err.println("4. Voltar atrás ");
         System.out.print("Escolha uma opção: ");
         String targetDb = scanner.nextLine().trim();
 
-        if (targetDb.equals("3")) {
+        if (targetDb.equals("4")) {
             return;
         }
 
         com.arangodb.ArangoDB TestArango = null;
         PostgresAgeDriver pgDriver = null;
+        RemoteDatabase arcadeDb = null;
 
         try {
             java.util.List<String> userDbs = new java.util.ArrayList<>();
@@ -359,6 +380,15 @@ public static void main(String[] args) {
                         counter++;
                     }
                 }
+            } else if (targetDb.equals("3")) {
+                RemoteServer arcadeServer = new RemoteServer("127.0.0.1", 2480, "root", "password");
+                System.out.println("A procurar bases de dados no servidor ArcadeDB...");
+                int counter = 1;
+                for (String dbName : arcadeServer.databases()) {
+                    System.out.println("  " + counter + ". " + dbName);
+                    userDbs.add(dbName);
+                    counter++;
+                }
             } else {
                 System.out.println("Opção inválida. Operação cancelada.");
                 return;
@@ -390,6 +420,7 @@ public static void main(String[] args) {
             Connection postgresConn = null;
             BenchmarkEngineArango arangoEngine = null;
             BenchmarkEnginePostgres postgresEngine = null;
+            BenchmarkEngineArcade arcadeEngine = null;
 
             if (targetDb.equals("1")) {
                 arangoDbConnection = TestArango.db(dbAlvo);
@@ -400,6 +431,11 @@ public static void main(String[] args) {
                 postgresConn = pgDriver.getConnection();
                 postgresEngine = new BenchmarkEnginePostgres(dbAlvo);
                 postgresEngine.warmUpAndHarvest(postgresConn);
+            } else if (targetDb.equals("3")) {
+                arcadeDb = new RemoteDatabase("127.0.0.1", 2480, dbAlvo, "root", "password");
+                arcadeDb.setTimeout((int) (BenchmarkEngineArcade.ARCADE_QUERY_HARD_TIMEOUT_MS + 5_000L));
+                arcadeEngine = new BenchmarkEngineArcade("127.0.0.1", 2480, "root", "password");
+                arcadeEngine.warmUpAndHarvest(arcadeDb);
             }
 
             System.out.println("\nSelecione o perfil de distribuição de carga (HTAP):");
@@ -455,14 +491,23 @@ public static void main(String[] args) {
                 System.out.println("Entrada inválida. A assumir 100 clientes por defeito.");
             }
 
+            // Configurar o intervalo de amostragem da telemetria (default 250ms, mínimo comprovado 100ms)
+            long intervaloTelemetriaMs = lerIntervaloTelemetria(scanner);
+
             // Disparar a Worker Pool com todos os parâmetros!
             if (targetDb.equals("1")) {
-                arangoEngine.runWorkload(arangoDbConnection, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
+                arangoEngine.setTelemetryIntervalMs(intervaloTelemetriaMs);
+                arangoEngine.runWorkload(arangoDbConnection, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes, intervaloTelemetriaMs);
                 // Limpa automaticamente o lixo HTAP no final do teste
                 arangoEngine.limparDadosTemporarios(arangoDbConnection);
             } else if (targetDb.equals("2")) {
-                postgresEngine.runWorkload(postgresConn, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes);
+                postgresEngine.setTelemetryIntervalMs(intervaloTelemetriaMs);
+                postgresEngine.runWorkload(postgresConn, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes, intervaloTelemetriaMs);
                 postgresEngine.limparDadosTemporarios(postgresConn);
+            } else if (targetDb.equals("3")) {
+                arcadeEngine.setTelemetryIntervalMs(intervaloTelemetriaMs);
+                arcadeEngine.runWorkload(arcadeDb, perfilNome, probsLeitura, probsEscrita, readPercentage, numClientes, intervaloTelemetriaMs);
+                arcadeEngine.limparDadosTemporarios(arcadeDb);
             }
 
         } catch (Exception e) {
@@ -478,6 +523,50 @@ public static void main(String[] args) {
                     System.out.println("[ERRO] Falha ao fechar conexão com PostgreSQL: " + e.getMessage());
                 }
             }
+            if (arcadeDb != null) {
+                try {
+                    arcadeDb.close();
+                } catch (Exception e) {
+                    System.out.println("[ERRO] Falha ao fechar conexão com ArcadeDB: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Lê o intervalo de amostragem de telemetria (CPU/RAM) do utilizador.
+     * Mantém 250 ms como default provado (SPBench, Garcia et al., 2023; Reveal, Chen et al., 2025)
+     * e impõe 100 ms como limite mínimo científico comprovado (RAGPerf, Li et al., 2026;
+     * Reveal, Chen et al., 2025; Linux perf-stat(1); Google Perfetto) para evitar Observer Effect.
+     */
+    private static long lerIntervaloTelemetria(Scanner scanner) {
+        System.out.print("Introduza o intervalo de amostragem de CPU/RAM em ms [Enter = "
+                + TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS + " ms (default) | Mínimo comprovado = "
+                + TelemetryEngine.MIN_SAMPLING_INTERVAL_MS + " ms]: ");
+        if (!scanner.hasNextLine()) {
+            return TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS;
+        }
+        String input = scanner.nextLine().trim();
+        if (input.isEmpty()) {
+            System.out.println("-> A assumir intervalo default comprovado: "
+                    + TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS + " ms.");
+            return TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS;
+        }
+        try {
+            long valor = Long.parseLong(input);
+            if (valor < TelemetryEngine.MIN_SAMPLING_INTERVAL_MS) {
+                System.out.println("-> [AVISO] Intervalos inferiores a "
+                        + TelemetryEngine.MIN_SAMPLING_INTERVAL_MS
+                        + " ms geram ruído no sistema (Observer Effect). A aplicar o mínimo comprovado: "
+                        + TelemetryEngine.MIN_SAMPLING_INTERVAL_MS + " ms.");
+                return TelemetryEngine.MIN_SAMPLING_INTERVAL_MS;
+            }
+            System.out.println("-> Intervalo de telemetria configurado para: " + valor + " ms.");
+            return valor;
+        } catch (NumberFormatException e) {
+            System.out.println("-> Entrada inválida. A assumir intervalo default comprovado: "
+                    + TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS + " ms.");
+            return TelemetryEngine.DEFAULT_SAMPLING_INTERVAL_MS;
         }
     }
 }

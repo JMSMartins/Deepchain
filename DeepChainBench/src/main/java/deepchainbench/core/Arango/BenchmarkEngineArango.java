@@ -14,6 +14,44 @@ import deepchainbench.core.TelemetryEngine;
 
 public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabase>{
 
+    public static final double ARANGO_QUERY_HARD_TIMEOUT_SEC = 60.0;
+    public static final long GLOBAL_BENCHMARK_TIMEOUT_MINUTES = 10L;
+
+    /**
+     * Classifica exatamente se a falha no ArangoDB foi provocada pelo timeout do nosso código
+     * (maxRuntime) ou por timeout/lock/erro interno da própria base de dados.
+     */
+    public static FailureOrigin classifyArangoFailure(com.arangodb.ArangoDBException e, long elapsedMs, double maxRuntimeSec) {
+        Integer errNum = e.getErrorNum();
+        Integer respCode = e.getResponseCode();
+        String msg = e.getErrorMessage() != null ? e.getErrorMessage().toLowerCase(Locale.ROOT) : "";
+
+        if (errNum != null && errNum == 1500) {
+            if (elapsedMs >= (long) (maxRuntimeSec * 1000.0 * 0.90)) {
+                return FailureOrigin.TIMEOUT_CODE_QUERY;
+            }
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        if (errNum != null && errNum == 1200) {
+            if (msg.contains("timeout")) {
+                return FailureOrigin.TIMEOUT_DB;
+            }
+            return FailureOrigin.DB_LOCK_DEADLOCK;
+        }
+        if ((respCode != null && respCode == 504) || msg.contains("timeout")
+                || hasCause(e, java.net.SocketTimeoutException.class)) {
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        return FailureOrigin.DB_RESOURCE_OR_ERROR;
+    }
+
+    public static FailureOrigin classifyArangoGenericFailure(Throwable e) {
+        if (hasCause(e, java.net.SocketTimeoutException.class) || hasCause(e, java.util.concurrent.TimeoutException.class)) {
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        return FailureOrigin.CLIENT_OR_OTHER;
+    }
+
 //    Oposição Direta à Literatura (Quebrar o Small-World): 
 //            O estado da arte dos benchmarks (como o UniBench ou o M2Bench) foca-se na variedade horizontal de dados, 
 //            mas utiliza queries de grafos extremamente superficiais, raramente ultrapassando os 2 ou 3 hops de distância. 
@@ -208,7 +246,8 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         latencies.clear();
         falhasContencao.clear();
         latencyLogs.clear();
-        executionLogs.clear(); // <-- NOVA // Limpar a timeline
+        executionLogs.clear();
+        operationRecords.clear();
 
         int pedidosPorCliente = 10;
         int totalPedidos = numClientes * pedidosPorCliente;
@@ -225,11 +264,13 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         System.out.println("-> Clientes Simultâneos: " + numClientes);
         System.out.println("-> Carga: " + pedidosPorCliente + " queries/cliente (Total: " + totalPedidos + " operações)");
         System.out.println("-> Rácio Leitura/Escrita: " + readPercentage + "% / " + (100 - readPercentage) + "%");
+        System.out.println("-> Intervalo de Telemetria (CPU/RAM): " + this.telemetryIntervalMs + " ms");
         System.out.println("-> Diretório de Métricas: " + folderPath);
 
         // 2. INICIAR TELEMETRIA DE CPU E RAM (RAM global via /proc/meminfo — alinhado com PostgreSQL)
         String globalCsv = folderPath + "/hardware_telemetry.csv";
-        TelemetryEngine observador = new LinuxProcTelemetry(globalCsv);
+        TelemetryEngine observador = new LinuxProcTelemetry(globalCsv, this.telemetryIntervalMs);
+        long baselineStartTs = System.currentTimeMillis();
         Thread threadObservador = new Thread(observador);
         threadObservador.start();
 
@@ -238,7 +279,8 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
             Thread.sleep(2000);
         } catch (InterruptedException e) {
         }
-        
+        long baselineEndTs = System.currentTimeMillis();
+
         // =========================================================================
         // ROUND 0 (COLD START): Forçar compilação dos planos de execução no SGBD
         // =========================================================================
@@ -270,7 +312,7 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
             long timeNow = System.currentTimeMillis();
             
             // O segredo está aqui: A tag "COLD_READ" em vez de "READ"
-            latencyLogs.add(timeNow + ",COLD_READ," + latencyMs + "," + sucesso);
+            latencyLogs.add(timeNow + ",COLD_READ," + latencyMs + "," + sucesso + "," + (sucesso ? FailureOrigin.SUCCESS.name() : FailureOrigin.DB_RESOURCE_OR_ERROR.name()));
             executionLogs.add("[" + new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_READ (Q" + (q + 1) + ") em " + latencyMs + " ms.");
         }
 
@@ -304,10 +346,11 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
             long timeNow = System.currentTimeMillis();
             
             // O segredo está aqui: A tag "COLD_WRITE" em vez de "WRITE"
-            latencyLogs.add(timeNow + ",COLD_WRITE," + latencyMs + "," + sucesso);
+            latencyLogs.add(timeNow + ",COLD_WRITE," + latencyMs + "," + sucesso + "," + (sucesso ? FailureOrigin.SUCCESS.name() : FailureOrigin.DB_RESOURCE_OR_ERROR.name()));
             executionLogs.add("[" + new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_WRITE (W" + (w + 1) + ") em " + latencyMs + " ms.");
         }
-        System.out.println("-> ROUND 0 CONCLUÍDO em " + (System.currentTimeMillis() - tInicioRound0) + "ms. Planos de execução em cache.");
+        long tFimRound0 = System.currentTimeMillis();
+        System.out.println("-> ROUND 0 CONCLUÍDO em " + (tFimRound0 - tInicioRound0) + "ms. Planos de execução em cache.");
         // =========================================================================
         // FIM DO ROUND 0
         // =========================================================================
@@ -393,10 +436,11 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
 
                         long startQuery = System.nanoTime();
                         boolean sucesso = true;
+                        FailureOrigin failureOrigin = FailureOrigin.SUCCESS;
                         String erroDetalhe = "";
 
                         try {
-                            AqlQueryOptions options = new AqlQueryOptions().maxRuntime(60.0);
+                            AqlQueryOptions options = new AqlQueryOptions().maxRuntime(ARANGO_QUERY_HARD_TIMEOUT_SEC);
                             ArangoCursor<Map> cursor = db.query(queryExecutar, Map.class, bindVars, options);
                             while (cursor.hasNext()) {
                                 cursor.next();
@@ -404,17 +448,15 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
                             cursor.close();
                         } catch (com.arangodb.ArangoDBException e) {
                             sucesso = false;
-                            if (e.getErrorNum() != null && (e.getErrorNum() == 1200 || e.getErrorNum() == 1500)) {
-                                erroDetalhe = "Erro " + e.getErrorNum() + ": " + e.getErrorMessage();
-                                falhasContencao.add("Timeout/Lock");
-                            } else {
-                                erroDetalhe = "Overload (" + e.getErrorNum() + ")";
-                                falhasContencao.add("Overload: " + e.getErrorNum());
-                            }
+                            long elapsedMs = (System.nanoTime() - startQuery) / 1_000_000;
+                            failureOrigin = classifyArangoFailure(e, elapsedMs, ARANGO_QUERY_HARD_TIMEOUT_SEC);
+                            erroDetalhe = failureOrigin.getLabel() + " (Err " + e.getErrorNum() + "): " + e.getErrorMessage();
+                            falhasContencao.add(failureOrigin.name());
                         } catch (Exception e) {
                             sucesso = false;
-                            erroDetalhe = "Generic Error";
-                            falhasContencao.add("Generic Error");
+                            failureOrigin = classifyArangoGenericFailure(e);
+                            erroDetalhe = failureOrigin.getLabel() + " (" + e.getClass().getSimpleName() + ")";
+                            falhasContencao.add(failureOrigin.name());
                         }
 
                         long endQuery = System.nanoTime();
@@ -425,7 +467,7 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
                         if (sucesso) {
                             logEnd = "[" + timeFormatStr + "] [Stream " + String.format("%03d", streamId) + "] CONCLUIU " + labelQuery + " em " + latencyMs + " ms.";
                         } else {
-                            logEnd = "[" + timeFormatStr + "] [Stream " + String.format("%03d", streamId) + "] FALHOU   " + labelQuery + " (" + erroDetalhe + ") após " + latencyMs + " ms.";
+                            logEnd = "[" + timeFormatStr + "] [Stream " + String.format("%03d", streamId) + "] FALHOU   " + labelQuery + " [" + failureOrigin.getLabel() + "] (" + erroDetalhe + ") após " + latencyMs + " ms.";
                         }
 
                         System.out.println("   " + logEnd);
@@ -433,7 +475,8 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
 
                         latencies.add(latencyMs);
                         long timeNow = System.currentTimeMillis();
-                        latencyLogs.add(timeNow + "," + (isRead ? "READ" : "WRITE") + "," + latencyMs + "," + sucesso);
+                        operationRecords.add(new OperationRecord(timeNow, isRead, latencyMs, sucesso, failureOrigin));
+                        latencyLogs.add(timeNow + "," + (isRead ? "READ" : "WRITE") + "," + latencyMs + "," + sucesso + "," + failureOrigin.name());
                     }
                 } catch (Exception e) {
                     System.err.println("Erro crítico no Stream " + streamId + ": " + e.getMessage());
@@ -443,12 +486,22 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
             });
         }
 
+        boolean terminouNormalmente = true;
         try {
-            latch.await();
+            terminouNormalmente = latch.await(GLOBAL_BENCHMARK_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            if (!terminouNormalmente) {
+                System.err.println("\n[ERRO FATAL] O Benchmark excedeu o limite global de " + GLOBAL_BENCHMARK_TIMEOUT_MINUTES + " minutos. A forçar paragem.");
+                executor.shutdownNow();
+            }
         } catch (InterruptedException e) {
+            terminouNormalmente = false;
+            executor.shutdownNow();
         }
         long endTimeGlobal = System.currentTimeMillis();
         long durationTotalMs = endTimeGlobal - startTimeGlobal;
+        if (!terminouNormalmente) {
+            registarOperacoesNaoConcluidasPorTimeoutGlobal(totalPedidos, durationTotalMs);
+        }
         executor.shutdown();
 
         // 4. PARAR TELEMETRIA
@@ -463,52 +516,12 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         } catch (InterruptedException e) {
         }
 
-        // 5. EXPORTAR FICHEIROS E GERAR GRÁFICOS RAM/CPU
-        String janelasCsv = folderPath + "/janela_workload.csv";
-        try (java.io.FileWriter fw = new java.io.FileWriter(janelasCsv)) {
-            fw.append("Start_Timestamp,End_Timestamp,Engine,Schema,Query_ID,Target_Key,Run_Type,Latency_ms,Delta_RAM_MB,RFI\n");
-            fw.append(startTimeGlobal + "," + endTimeGlobal + ",ArangoDB," + db.name() + ",MIX,N/A,Warm_HTAP," + durationTotalMs + ",0,0\n");
-        } catch (Exception e) {
-        }
-
-        String pngPath = folderPath + "/grafico_HTAP";
-        System.out.println("\n-> A processar gráficos do Benchmark HTAP...");
-        GraphGenerator.createRFIChart(globalCsv, janelasCsv, pngPath);
-
-        // 6. EXPORTAR A TIMELINE DAS LATÊNCIAS
-        String timelineCsv = folderPath + "/latency_timeline.csv";
-        try (java.io.FileWriter fw = new java.io.FileWriter(timelineCsv)) {
-            fw.append("Timestamp_ms,Tipo_Operacao,Latencia_ms,Sucesso\n");
-            for (String log : latencyLogs) {
-                fw.append(log + "\n");
-            }
-        } catch (Exception e) {
-        }
-
-        // =======================================================
-        // NOVOS PASSOS: GRÁFICOS DE LATÊNCIA E RELATÓRIO DE LOGS
-        // =======================================================
-        // 7. CHAMAR O GERADOR DE GRÁFICOS DE LATÊNCIA E BARRAS
-        GraphGenerator.createHTAPCharts(timelineCsv, pngPath);
-
-        // 8. EXPORTAR O RELATÓRIO TEXTUAL COMPLETO (Logs do Terminal)
-        String logTextPath = folderPath + "/execution_log.txt";
-        try (java.io.FileWriter fw = new java.io.FileWriter(logTextPath)) {
-            fw.append("========== RELATÓRIO DE EXECUÇÃO HTAP: " + perfilNome + " ==========\n");
-            fw.append("Tempo Total de Benchmark: " + (durationTotalMs / 1000.0) + " s\n");
-            fw.append("Clientes Simultâneos: " + numClientes + "\n");
-            fw.append("Total de Operações Submetidas: " + totalPedidos + "\n");
-            fw.append("============================================================\n\n");
-            for (String logLine : executionLogs) {
-                fw.append(logLine + "\n");
-            }
-            System.out.println("-> Relatório em texto (Logs) exportado para: " + logTextPath);
-        } catch (Exception e) {
-            System.err.println("[ERRO] Falha ao exportar os logs: " + e.getMessage());
-        }
-
-        
-        processarEstatisticas(sessionTimestamp, perfilNome, numClientes, totalPedidos, durationTotalMs);
+        finalizarEReportarHTAP(
+                sessionTimestamp, "ArangoDB", db.name(), perfilNome,
+                numClientes, totalPedidos, folderPath, globalCsv, observador,
+                baselineStartTs, baselineEndTs, tInicioRound0, tFimRound0,
+                startTimeGlobal, endTimeGlobal, durationTotalMs
+        );
 
     }
 
@@ -625,13 +638,15 @@ public class BenchmarkEngineArango extends AbstractBenchmarkEngine<ArangoDatabas
         String globalCsv = "./metrics/resultados_observador_" + sessionTimestamp + ".csv";
 
         // ALTERAÇÃO 1: Instanciação específica para ArangoDB (Ajusta user/pass se necessário)
+        System.out.println("-> Intervalo de Telemetria (CPU/RAM): " + this.telemetryIntervalMs + " ms");
         TelemetryEngine observador = new ArangoTelemetry(
                 globalCsv,
                 "127.0.0.1",
                 8529,
                 db.name(),
                 "root",
-                "password"
+                "password",
+                this.telemetryIntervalMs
         );
 
         Thread threadObservador = new Thread(observador);

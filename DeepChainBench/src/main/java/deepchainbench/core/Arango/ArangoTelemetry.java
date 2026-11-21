@@ -18,7 +18,11 @@ public class ArangoTelemetry extends TelemetryEngine {
     private final HttpRequest request;
 
     public ArangoTelemetry(String outputFile, String host, int port, String dbName, String user, String password) {
-        super(outputFile);
+        this(outputFile, host, port, dbName, user, password, DEFAULT_SAMPLING_INTERVAL_MS);
+    }
+
+    public ArangoTelemetry(String outputFile, String host, int port, String dbName, String user, String password, long samplingIntervalMs) {
+        super(outputFile, samplingIntervalMs);
 
         // Endpoint que contém as métricas (Prometheus format)
         String url = String.format("http://%s:%d/_db/%s/_admin/metrics", host, port, dbName);

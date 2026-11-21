@@ -11,7 +11,9 @@ O projeto está modularizado para suportar múltiplos SGBDs através de injeçã
 
 - `deepchainbench.core`: Contém os motores abstratos (`AbstractBenchmarkEngine`), telemetria (`TelemetryEngine`, `LinuxProcTelemetry`) e exportação (`MetricsExporter`).
 - `deepchainbench.core.Arango`: Motores e sondas específicas para ArangoDB (Prometheus API).
-- `deepchainbench.drivers`: Adaptadores JDBC/Nativos. Ponto de expansão para novos motores (ex: `ArangoDriver`, `PostgresAgeDriver`).
+- `deepchainbench.core.Postgres`: Motor HTAP e telemetria para PostgreSQL + Apache AGE.
+- `deepchainbench.core.Arcade`: Motor HTAP e telemetria para ArcadeDB.
+- `deepchainbench.drivers`: Adaptadores JDBC/Nativos. Ponto de expansão para novos motores (ex: `ArangoDriver`, `PostgresAgeDriver`, `ArcadeDbDriver`).
 - `deepchainbench.generator`: Onde a magia matemática acontece. Gera CSVs/JSON estocásticos e escalonáveis (`Generator_data`, `GraphGenerator`).
 
 
@@ -21,6 +23,7 @@ Para executares testes de integração na tua sandbox, tens de garantir que os s
 
 - **ArangoDB**: Porta `8529` (Credenciais default: `root` / `password`).
 - **PostgreSQL (com extensão Apache AGE)**: Porta `5432` (Credenciais default: `postgres` / `password`).
+- **ArcadeDB**: Porta `2480` (API HTTP Remota; credenciais default: `root` / `password`).
 
 ## 3. Comandos de Build e Execução (CRÍTICO: Interface Interativa)
 

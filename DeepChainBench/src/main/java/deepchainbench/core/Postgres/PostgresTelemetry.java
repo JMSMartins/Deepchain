@@ -15,6 +15,11 @@ public class PostgresTelemetry extends TelemetryEngine {
         this.conn = conn;
     }
 
+    public PostgresTelemetry(String outputFile, Connection conn, long samplingIntervalMs) {
+        super(outputFile, samplingIntervalMs);
+        this.conn = conn;
+    }
+
     @Override
     public double getSystemRamUsedMB() {
         // Query to check database memory or use LinuxProcTelemetry as fallback

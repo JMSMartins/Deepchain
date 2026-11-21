@@ -40,6 +40,44 @@ import java.util.concurrent.Executors;
  */
 public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection> {
 
+    public static final int POSTGRES_QUERY_HARD_TIMEOUT_SEC = 120;
+    public static final long GLOBAL_BENCHMARK_TIMEOUT_MINUTES = 10L;
+
+    /**
+     * Classifica exatamente se a falha no PostgreSQL + AGE foi provocada pelo timeout do código
+     * (PreparedStatement.setQueryTimeout) ou por timeout/deadlock/erro da própria base de dados.
+     */
+    public static FailureOrigin classifyPostgresFailure(SQLException e, long elapsedMs, int queryTimeoutSec) {
+        String sqlState = e.getSQLState();
+        String msg = e.getMessage() != null ? e.getMessage().toLowerCase(Locale.ROOT) : "";
+
+        if ("57014".equals(sqlState) || e instanceof java.sql.SQLTimeoutException) {
+            boolean isDbConfiguredTimeout = msg.contains("statement timeout")
+                    || msg.contains("lock timeout")
+                    || msg.contains("idle-in-transaction")
+                    || msg.contains("idle session");
+            boolean isCodeTimerWindow = elapsedMs >= (long) (queryTimeoutSec * 1000.0 * 0.90);
+            if (!isDbConfiguredTimeout && (isCodeTimerWindow || e instanceof java.sql.SQLTimeoutException)) {
+                return FailureOrigin.TIMEOUT_CODE_QUERY;
+            }
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        if ("40P01".equals(sqlState) || "40001".equals(sqlState) || "55P03".equals(sqlState)) {
+            return FailureOrigin.DB_LOCK_DEADLOCK;
+        }
+        if (hasCause(e, java.net.SocketTimeoutException.class) || msg.contains("timeout")) {
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        return FailureOrigin.DB_RESOURCE_OR_ERROR;
+    }
+
+    public static FailureOrigin classifyPostgresGenericFailure(Throwable e) {
+        if (hasCause(e, java.net.SocketTimeoutException.class) || hasCause(e, java.util.concurrent.TimeoutException.class)) {
+            return FailureOrigin.TIMEOUT_DB;
+        }
+        return FailureOrigin.CLIENT_OR_OTHER;
+    }
+
     private String graphName = "deepchaindb";
     private final String qualityTable;
     private final String telemetryTable;
@@ -113,6 +151,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
         falhasContencao.clear();
         latencyLogs.clear();
         executionLogs.clear();
+        operationRecords.clear();
 
         int pedidosPorCliente = 10;
         int totalPedidos = numClientes * pedidosPorCliente;
@@ -130,16 +169,19 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
         System.out.println("-> Clientes Simultâneos: " + numClientes);
         System.out.println("-> Carga: " + pedidosPorCliente + " queries/cliente (Total: " + totalPedidos + " operações)");
         System.out.println("-> Rácio Leitura/Escrita: " + readPercentage + "% / " + (100 - readPercentage) + "%");
+        System.out.println("-> Intervalo de Telemetria (CPU/RAM): " + this.telemetryIntervalMs + " ms");
         System.out.println("-> Diretório de Métricas: " + folderPath);
 
         // 2. INICIAR TELEMETRIA (RAM total do sistema via /proc/meminfo — alinhado com ArangoDB)
         String globalCsv = folderPath + "/hardware_telemetry.csv";
-        TelemetryEngine observador = new LinuxProcTelemetry(globalCsv);
+        TelemetryEngine observador = new LinuxProcTelemetry(globalCsv, this.telemetryIntervalMs);
+        long baselineStartTs = System.currentTimeMillis();
         Thread threadObservador = new Thread(observador);
         threadObservador.start();
 
         System.out.println("-> A gravar baseline de hardware (Aguardando 2 segundos)...");
         try { Thread.sleep(2000); } catch (InterruptedException e) {}
+        long baselineEndTs = System.currentTimeMillis();
 
         // =====================================================================
         // ROUND 0 (COLD START)
@@ -168,7 +210,7 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             } catch (Exception e) { sucesso = false; }
 
             long latencyMs = (System.nanoTime() - startQuery) / 1_000_000;
-            latencyLogs.add(System.currentTimeMillis() + ",COLD_READ," + latencyMs + "," + sucesso);
+            latencyLogs.add(System.currentTimeMillis() + ",COLD_READ," + latencyMs + "," + sucesso + "," + (sucesso ? FailureOrigin.SUCCESS.name() : FailureOrigin.DB_RESOURCE_OR_ERROR.name()));
             executionLogs.add("[" + sdfUtc.format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_READ (Q" + (q + 1) + ") em " + latencyMs + " ms.");
         }
 
@@ -189,10 +231,11 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             } catch (Exception e) { sucesso = false; }
 
             long latencyMs = (System.nanoTime() - startQuery) / 1_000_000;
-            latencyLogs.add(System.currentTimeMillis() + ",COLD_WRITE," + latencyMs + "," + sucesso);
+            latencyLogs.add(System.currentTimeMillis() + ",COLD_WRITE," + latencyMs + "," + sucesso + "," + (sucesso ? FailureOrigin.SUCCESS.name() : FailureOrigin.DB_RESOURCE_OR_ERROR.name()));
             executionLogs.add("[" + sdfUtc.format(new java.util.Date()) + "] [Round 0] CONCLUIU COLD_WRITE (W" + (w + 1) + ") em " + latencyMs + " ms.");
         }
-        System.out.println("-> ROUND 0 CONCLUÍDO em " + (System.currentTimeMillis() - tInicioRound0) + "ms. Planos em cache.");
+        long tFimRound0 = System.currentTimeMillis();
+        System.out.println("-> ROUND 0 CONCLUÍDO em " + (tFimRound0 - tInicioRound0) + "ms. Planos em cache.");
 
         // =====================================================================
         // ATAQUE HTAP
@@ -254,10 +297,11 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
 
                         long startQuery = System.nanoTime();
                         boolean sucesso = true;
+                        FailureOrigin failureOrigin = FailureOrigin.SUCCESS;
                         String erroDetalhe = "";
 
                         try (PreparedStatement pstmt = workerConn.prepareStatement(queryExecutar)) {
-                            pstmt.setQueryTimeout(120);
+                            pstmt.setQueryTimeout(POSTGRES_QUERY_HARD_TIMEOUT_SEC);
 
                             if (isRead) {
                                 if (queryIndex == 1) {
@@ -276,18 +320,15 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
                             }
                         } catch (SQLException e) {
                             sucesso = false;
-                            String sqlState = e.getSQLState();
-                            if (sqlState != null && (sqlState.equals("57014") || sqlState.equals("40P01") || sqlState.equals("40001"))) {
-                                erroDetalhe = "Timeout/Deadlock (" + sqlState + ")";
-                                falhasContencao.add("Timeout/Lock");
-                            } else {
-                                erroDetalhe = "Erro SQLSTATE: " + sqlState;
-                                falhasContencao.add("SQL Error: " + sqlState);
-                            }
+                            long elapsedMs = (System.nanoTime() - startQuery) / 1_000_000;
+                            failureOrigin = classifyPostgresFailure(e, elapsedMs, POSTGRES_QUERY_HARD_TIMEOUT_SEC);
+                            erroDetalhe = failureOrigin.getLabel() + " [SQLSTATE " + e.getSQLState() + "]";
+                            falhasContencao.add(failureOrigin.name());
                         } catch (Exception e) {
                             sucesso = false;
-                            erroDetalhe = "Erro Genérico Java";
-                            falhasContencao.add("Generic Error");
+                            failureOrigin = classifyPostgresGenericFailure(e);
+                            erroDetalhe = failureOrigin.getLabel() + " (" + e.getClass().getSimpleName() + ")";
+                            falhasContencao.add(failureOrigin.name());
                         }
 
                         long latencyMs = (System.nanoTime() - startQuery) / 1_000_000;
@@ -299,15 +340,17 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
                         } else {
                             logEnd = "[" + sdfUtc.format(new java.util.Date()) + "] [Stream "
                                     + String.format("%03d", streamId) + "] FALHOU   " + labelQuery
-                                    + " (" + erroDetalhe + ") após " + latencyMs + " ms.";
+                                    + " [" + failureOrigin.getLabel() + "] (" + erroDetalhe + ") após " + latencyMs + " ms.";
                         }
 
                         System.out.println("   " + logEnd);
                         executionLogs.add(logEnd);
 
                         latencies.add(latencyMs);
-                        latencyLogs.add(System.currentTimeMillis() + "," + (isRead ? "READ" : "WRITE")
-                                + "," + latencyMs + "," + sucesso);
+                        long timeNow = System.currentTimeMillis();
+                        operationRecords.add(new OperationRecord(timeNow, isRead, latencyMs, sucesso, failureOrigin));
+                        latencyLogs.add(timeNow + "," + (isRead ? "READ" : "WRITE")
+                                + "," + latencyMs + "," + sucesso + "," + failureOrigin.name());
                     }
                 } catch (Exception e) {
                     System.err.println("Erro crítico no Stream " + streamId + ": " + e.getMessage());
@@ -318,15 +361,23 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
             });
         }
 
+        boolean terminouNormalmente = true;
         try {
-            boolean terminouNormalmente = latch.await(10, java.util.concurrent.TimeUnit.MINUTES);
+            terminouNormalmente = latch.await(GLOBAL_BENCHMARK_TIMEOUT_MINUTES, java.util.concurrent.TimeUnit.MINUTES);
             if (!terminouNormalmente) {
-                System.err.println("\n[ERRO FATAL] O Benchmark excedeu o limite global de 10 minutos. A forçar paragem.");
+                System.err.println("\n[ERRO FATAL] O Benchmark excedeu o limite global de " + GLOBAL_BENCHMARK_TIMEOUT_MINUTES + " minutos. A forçar paragem.");
+                executor.shutdownNow();
             }
-        } catch (InterruptedException e) {}
+        } catch (InterruptedException e) {
+            terminouNormalmente = false;
+            executor.shutdownNow();
+        }
 
         long endTimeGlobal = System.currentTimeMillis();
         long durationTotalMs = endTimeGlobal - startTimeGlobal;
+        if (!terminouNormalmente) {
+            registarOperacoesNaoConcluidasPorTimeoutGlobal(totalPedidos, durationTotalMs);
+        }
         executor.shutdown();
 
         // 4. PARAR TELEMETRIA
@@ -335,40 +386,12 @@ public class BenchmarkEnginePostgres extends AbstractBenchmarkEngine<Connection>
         observador.stopEngine();
         try { Thread.sleep(200); } catch (InterruptedException e) {}
 
-        // 5. EXPORTAR FICHEIROS E GRÁFICOS
-        String janelasCsv = folderPath + "/janela_workload.csv";
-        try (java.io.FileWriter fw = new java.io.FileWriter(janelasCsv)) {
-            fw.append("Start_Timestamp,End_Timestamp,Engine,Schema,Query_ID,Target_Key,Run_Type,Latency_ms,Delta_RAM_MB,RFI\n");
-            fw.append(startTimeGlobal + "," + endTimeGlobal + ",PostgreSQL,Public,MIX,N/A,Warm_HTAP,"
-                    + durationTotalMs + ",0,0\n");
-        } catch (Exception e) {}
-
-        String pngPath = folderPath + "/grafico_HTAP";
-        System.out.println("\n-> A processar gráficos do Benchmark HTAP...");
-        GraphGenerator.createRFIChart(globalCsv, janelasCsv, pngPath);
-
-        String timelineCsv = folderPath + "/latency_timeline.csv";
-        try (java.io.FileWriter fw = new java.io.FileWriter(timelineCsv)) {
-            fw.append("Timestamp_ms,Tipo_Operacao,Latencia_ms,Sucesso\n");
-            for (String log : latencyLogs) fw.append(log + "\n");
-        } catch (Exception e) {}
-
-        GraphGenerator.createHTAPCharts(timelineCsv, pngPath);
-
-        String logTextPath = folderPath + "/execution_log.txt";
-        try (java.io.FileWriter fw = new java.io.FileWriter(logTextPath)) {
-            fw.append("========== RELATÓRIO DE EXECUÇÃO HTAP: " + perfilNome + " ==========\n");
-            fw.append("Tempo Total de Benchmark: " + (durationTotalMs / 1000.0) + " s\n");
-            fw.append("Clientes Simultâneos: " + numClientes + "\n");
-            fw.append("Total de Operações Submetidas: " + totalPedidos + "\n");
-            fw.append("============================================================\n\n");
-            for (String logLine : executionLogs) fw.append(logLine + "\n");
-            System.out.println("-> Relatório em texto (Logs) exportado para: " + logTextPath);
-        } catch (Exception e) {
-            System.err.println("[ERRO] Falha ao exportar os logs: " + e.getMessage());
-        }
-
-        processarEstatisticas(sessionTimestamp, perfilNome, numClientes, totalPedidos, durationTotalMs);
+        finalizarEReportarHTAP(
+                sessionTimestamp, "PostgreSQL+AGE", this.graphName, perfilNome,
+                numClientes, totalPedidos, folderPath, globalCsv, observador,
+                baselineStartTs, baselineEndTs, tInicioRound0, tFimRound0,
+                startTimeGlobal, endTimeGlobal, durationTotalMs
+        );
     }
 
     // =========================================================================
